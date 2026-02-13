@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 Wimbledon Gentlemen's Singles Predictor</title>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        wimbledon: {
+                            purple: '#371858', // Traditional deep purple
+                            green: '#2C6938',  // Traditional deep green
+                            gold: '#C4A868',
+                            light: '#F5F5F7',
+                            dark: '#1D1D1F'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            overflow-x: hidden;
+            /* Prevent body scroll, handle in app */
+        }
+
+        /* Hide scrollbar for clean UI but keep functionality */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .match-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .player-slot {
+            transition: all 0.2s ease;
+        }
+
+        .player-slot.selectable:hover {
+            background-color: #f0fdf4;
+            /* green-50 */
+            cursor: pointer;
+        }
+
+        .player-slot.selected {
+            background-color: #dcfce7;
+            /* green-100 */
+            border-left: 4px solid #15803d;
+            /* green-700 */
+        }
+
+        /* Connecting lines logic would go here for a super advanced view, 
+           but for now we'll rely on clean spacing and column alignment */
+
+        @media print {
+            @page {
+                size: landscape;
+                margin: 5mm;
+            }
+
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                overflow: visible !important;
+            }
+
+            #root>div {
+                height: auto !important;
+                overflow: visible !important;
+            }
+
+            header button {
+                display: none !important;
+            }
+
+            main {
+                overflow: visible !important;
+                height: auto !important;
+            }
+
+            /* Reset transform for print */
+            main>div[style*="transform"] {
+                transform: scale(0.65) !important;
+                /* Scale down to fit width */
+                transform-origin: top left !important;
+                position: static !important;
+                width: auto !important;
+                padding: 0 !important;
+            }
+
+            /* Hide mobile tabs if visible */
+            .md\:hidden {
+                display: none !important;
+            }
+
+            /* Ensure text is readable */
+            * {
+                color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Data ---
+        const INITIAL_MATCHES = [
+            { "match_id": 1, "p1": "SINNER, Jannik [1]", "p2": "NARDI, Luca" },
+            { "match_id": 2, "p1": "TSENG, Chun-Hsin", "p2": "VUKIC, Aleksandar" },
+            { "match_id": 3, "p1": "MARTINEZ, Pedro", "p2": "LOFFHAGEN, George (W)" },
+            { "match_id": 4, "p1": "NAVONE, Mariano [27]", "p2": "SHAPOVALOV, Denis" },
+            { "match_id": 5, "p1": "DIMITROV, Grigor [19]", "p2": "NISHIOKA, Yoshihito" },
+            { "match_id": 6, "p1": "COMESANA, Francisco", "p2": "MOUTET, Corentin" },
+            { "match_id": 7, "p1": "OFNER, Sebastian", "p2": "MEDJEDOVIC, Hamad" },
+            { "match_id": 8, "p1": "MONDAY, Johannus (W)", "p2": "PAUL, Tommy [13]" },
+            { "match_id": 9, "p1": "SHELTON, Ben [10]", "p2": "BOLT, Alex (Q)" },
+            { "match_id": 10, "p1": "HIJIKATA, Rinky", "p2": "GOFFIN, David" },
+            { "match_id": 11, "p1": "KOVACEVIC, Aleksandar", "p2": "FUCSOVICS, Marton (L)" },
+            { "match_id": 12, "p1": "MONFILS, Gael", "p2": "HUMBERT, Ugo [18]" },
+            { "match_id": 13, "p1": "NAKASHIMA, Brandon [29]", "p2": "BU, Yunchaokete" },
+            { "match_id": 14, "p1": "SHEVCHENKO, Alexander", "p2": "OPELKA, Reilly" },
+            { "match_id": 15, "p1": "FARIA, Jaime (Q)", "p2": "SONEGO, Lorenzo" },
+            { "match_id": 16, "p1": "BASILASHVILI, Nikoloz (Q)", "p2": "MUSETTI, Lorenzo [32]" },
+            { "match_id": 17, "p1": "DRAPER, Jack [4]", "p2": "BAEZ, Sebastian" },
+            { "match_id": 18, "p1": "COLLIGNON, Raphael", "p2": "CILIC, Marin" },
+            { "match_id": 19, "p1": "MCCABE, James (Q)", "p2": "MAROZSAN, Fabian" },
+            { "match_id": 20, "p1": "MUNAR, Jaume", "p2": "BUBLIK, Alexander [28]" },
+            { "match_id": 21, "p1": "COBOLLI, Flavio [22]", "p2": "ZHUKAYEV, Beibit (Q)" },
+            { "match_id": 22, "p1": "ETCHEVERRY, Tomas Martin", "p2": "PINNINGTON JONES, Jack (W)" },
+            { "match_id": 23, "p1": "GIRON, Marcos", "p2": "UGO CARABELLI, Camilo" },
+            { "match_id": 24, "p1": "GASTON, Hugo", "p2": "MENSIK, Jakub [15]" },
+            { "match_id": 25, "p1": "DE MINAUR, Alex [11]", "p2": "CARBALLES BAENA, Roberto" },
+            { "match_id": 26, "p1": "CAZAUX, Arthur (Q)", "p2": "WALTON, Adam" },
+            { "match_id": 27, "p1": "HALYS, Quentin", "p2": "HOLMGREN, August (Q)" },
+            { "match_id": 28, "p1": "DZUMHUR, Damir", "p2": "MACHAC, Tomas [21]" },
+            { "match_id": 29, "p1": "MICHELSEN, Alex [30]", "p2": "KECMANOVIC, Miomir" },
+            { "match_id": 30, "p1": "DE JONG, Jesper", "p2": "EUBANKS, Christopher" },
+            { "match_id": 31, "p1": "EVANS, Daniel (W)", "p2": "CLARKE, Jay (W)" },
+            { "match_id": 32, "p1": "MULLER, Alexandre", "p2": "DJOKOVIC, Novak [6]" },
+            { "match_id": 33, "p1": "FRITZ, Taylor [5]", "p2": "MPETSHI PERRICARD, Giovanni" },
+            { "match_id": 34, "p1": "DIALLO, Gabriel", "p2": "ALTMAIER, Daniel" },
+            { "match_id": 35, "p1": "ARNALDI, Matteo", "p2": "VAN DE ZANDSCHULP, Botic" },
+            { "match_id": 36, "p1": "HOLT, Brandon", "p2": "DAVIDOVICH FOKINA, Alejandro [26]" },
+            { "match_id": 37, "p1": "POPYRIN, Alexei [20]", "p2": "FERY, Arthur (W)" },
+            { "match_id": 38, "p1": "DARDERI, Luciano", "p2": "SAFIULLIN, Roman" },
+            { "match_id": 39, "p1": "KOPRIVA, Vit", "p2": "THOMPSON, Jordan" },
+            { "match_id": 40, "p1": "BONZI, Benjamin", "p2": "MEDVEDEV, Daniil" },
+            { "match_id": 41, "p1": "CERUNDOLO, Francisco", "p2": "BORGES, Nuno [16]" },
+            { "match_id": 42, "p1": "HARRIS, Billy", "p2": "LAJOVIC, Dusan" },
+            { "match_id": 43, "p1": "MOCHIZUKI, Shintaro", "p2": "ZEPPIERI, Giulio" },
+            { "match_id": 44, "p1": "MCDONALD, Mackenzie", "p2": "KHACHANOV, Karen [17]" },
+            { "match_id": 45, "p1": "BERRETTINI, Matteo [9]", "p2": "MAJCHRZAK, Kamil" },
+            { "match_id": 46, "p1": "QUINN, Ethan", "p2": "SEARLE, Henry (W)" },
+            { "match_id": 47, "p1": "GARIN, Cristian (L)", "p2": "RODESCH, Chris (Q)" },
+            { "match_id": 48, "p1": "RINDERKNECH, Arthur", "p2": "ZVEREV, Alexander [3]" },
+            { "match_id": 49, "p1": "RUNE, Holger [8]", "p2": "JARRY, Nicolas (Q)" },
+            { "match_id": 50, "p1": "TIEN, Learner", "p2": "BASAVAREDDY, Nishesh" },
+            { "match_id": 51, "p1": "FEARNLEY, Jacob", "p2": "FONSECA, Joao" },
+            { "match_id": 52, "p1": "BROOKSBY, Jenson", "p2": "GRIEKSPOOR, Tallon" },
+            { "match_id": 53, "p1": "LEHECKA, Jiri [23]", "p2": "DELLIEN, Hugo" },
+            { "match_id": 54, "p1": "BELLUCCI, Mattia", "p2": "CRAWFORD, Oliver (W)" },
+            { "match_id": 55, "p1": "NORRIE, Cameron [31]", "p2": "BAUTISTA AGUT, Roberto" },
+            { "match_id": 56, "p1": "MOLLER, Elmer", "p2": "TIAFOE, Frances [12]" },
+            { "match_id": 57, "p1": "RUBLEV, Andrey [14]", "p2": "DJERE, Laslo" },
+            { "match_id": 58, "p1": "BERGS, Zizou", "p2": "HARRIS, Lloyd" },
+            { "match_id": 59, "p1": "MANNARINO, Adrian", "p2": "O'CONNELL, Christopher" },
+            { "match_id": 60, "p1": "ROYER, Valentin (Q)", "p2": "TSITSIPAS, Stefanos [24]" },
+            { "match_id": 61, "p1": "AUGER-ALIASSIME, Felix [25]", "p2": "DUCKWORTH, James" },
+            { "match_id": 62, "p1": "STRUFF, Jan-Lennard", "p2": "MISOLIC, Filip (Q)" },
+            { "match_id": 63, "p1": "TARVET, Oliver (Q)", "p2": "RIEDI, Leandro" },
+            { "match_id": 64, "p1": "FOGNINI, Fabio", "p2": "ALCARAZ, Carlos [2]" }
+        ];
+
+        const ROUND_NAMES = ["Round 1", "Round 2", "Round 3", "Round 4", "Quarter-finals", "Semi-finals", "Final", "Winner"];
+
+        // --- Components ---
+
+        function App() {
+            // State: bracket[roundIndex][matchIndex] = { p1, p2, winner }
+            // bracket is an array of 7 arrays (R1..Final)
+            const [bracket, setBracket] = useState([]);
+            const [score, setScore] = useState(0);
+            const [activeTab, setActiveTab] = useState(0); // For mobile view
+
+            // Pan & Zoom State
+            const [scale, setScale] = useState(1);
+            const containerRef = useRef(null);
+
+            // Initialize Bracket
+            useEffect(() => {
+                const rounds = [];
+                // Round 1: 64 matches
+                const r1 = INITIAL_MATCHES.map(m => ({
+                    id: `r1-${m.match_id}`,
+                    p1: { name: m.p1, isWinner: false },
+                    p2: { name: m.p2, isWinner: false },
+                    winner: null
+                }));
+                rounds.push(r1);
+
+                // Round 2: 32 matches
+                rounds.push(createEmptyRound(32, 2));
+                // Round 3: 16 matches
+                rounds.push(createEmptyRound(16, 3));
+                // Round 4: 8 matches
+                rounds.push(createEmptyRound(8, 4));
+                // QF: 4 matches
+                rounds.push(createEmptyRound(4, 5));
+                // SF: 2 matches
+                rounds.push(createEmptyRound(2, 6));
+                // Final: 1 match
+                rounds.push(createEmptyRound(1, 7));
+
+                // Winner slot (technically not a match, but useful for state)
+                // We'll handle winner separately or as a "virtual" round 8
+
+                setBracket(rounds);
+            }, []);
+
+            function createEmptyRound(count, roundNum) {
+                return Array(count).fill(null).map((_, i) => ({
+                    id: `r${roundNum}-${i + 1}`,
+                    p1: null, // { name: "...", isWinner: false }
+                    p2: null,
+                    winner: null
+                }));
+            }
+
+            const handleSelection = (roundIndex, matchIndex, playerKey) => {
+                if (roundIndex >= 7) return; // Winner picked logic handled elsewhere if needed
+
+                const newBracket = [...bracket];
+                const currentMatch = { ...newBracket[roundIndex][matchIndex] };
+
+                // If this match is not ready (missing players), do nothing
+                if (!currentMatch.p1 || !currentMatch.p2) return;
+
+                const selectedPlayer = currentMatch[playerKey];
+                const opponentKey = playerKey === 'p1' ? 'p2' : 'p1';
+
+                // Toggle logic or Selection logic?
+                // Simple selection: Click advances.
+
+                // Update current match winner status (visual only)
+                currentMatch.p1 = { ...currentMatch.p1, isWinner: playerKey === 'p1' };
+                currentMatch.p2 = { ...currentMatch.p2, isWinner: playerKey === 'p2' };
+                currentMatch.winner = selectedPlayer.name;
+
+                newBracket[roundIndex][matchIndex] = currentMatch;
+
+                // Advance to next round
+                const nextRoundIndex = roundIndex + 1;
+                if (nextRoundIndex < newBracket.length) {
+                    const nextMatchIndex = Math.floor(matchIndex / 2);
+                    const isNextP1 = matchIndex % 2 === 0;
+
+                    const nextMatch = { ...newBracket[nextRoundIndex][nextMatchIndex] };
+                    const advancedPlayer = { name: selectedPlayer.name, isWinner: false, fromMatchId: currentMatch.id };
+
+                    if (isNextP1) {
+                        nextMatch.p1 = advancedPlayer;
+                    } else {
+                        nextMatch.p2 = advancedPlayer;
+                    }
+
+                    // Reset winner if one was already picked in the destination match because the matchup changed
+                    // (Optional: keep if same player, but safer to reset to force re-pick)
+                    if (nextMatch.winner) {
+                        // Recursive clear forward flow could be implemented here
+                        // For simplicity, just unselect winner in next match but keep the other player
+                        nextMatch.winner = null;
+                        if (nextMatch.p1) nextMatch.p1.isWinner = false;
+                        if (nextMatch.p2) nextMatch.p2.isWinner = false;
+                        // And clear the round after that... 
+                        clearFutureRounds(newBracket, nextRoundIndex, nextMatchIndex);
+                    }
+
+                    newBracket[nextRoundIndex][nextMatchIndex] = nextMatch;
+                }
+
+                setBracket(newBracket);
+                calculateScore(newBracket);
+            };
+
+            const clearFutureRounds = (bracketState, rIndex, mIndex) => {
+                // Recursively clear path forward
+                const nextR = rIndex + 1;
+                if (nextR >= bracketState.length) return;
+
+                const nextM = Math.floor(mIndex / 2);
+                const nextMatch = { ...bracketState[nextR][nextM] };
+
+                // Determine which slot is being invalidated
+                const isP1 = mIndex % 2 === 0;
+
+                // If we are clearing, we are removing the player that came from (rIndex, mIndex)
+                // Actually, in handleSelection we are REPLACING, not removing. 
+                // So we only need to clear if the actual *winner* of the target match changes.
+                // The simple logic above (reset winner and isWinner flags) is enough for immediate next round.
+                // If the user replaces Player A with Player B in R2, then R3's slot for that winner needs to be updated or cleared.
+
+                // Let's do a Deep Clear for correctness:
+                // If we change the input to R(N), then the Winner of R(N) is invalid.
+                // Which means the input to R(N+1) is invalid (null).
+
+                if (isP1) nextMatch.p1 = null;
+                else nextMatch.p2 = null;
+
+                nextMatch.winner = null;
+                bracketState[nextR][nextM] = nextMatch;
+
+                // Recurse
+                clearFutureRounds(bracketState, nextR, nextM);
+            }
+
+            const calculateScore = (currentBracket) => {
+                // "Each match has a value of 1 point"
+                // 1 point per WINNER selected.
+                let total = 0;
+                currentBracket.forEach(round => {
+                    round.forEach(match => {
+                        if (match.winner) total += 1;
+                    });
+                });
+                setScore(total);
+            };
+
+            // --- Random Pick Logic ---
+            const handleRandomPick = () => {
+                // Deep clone the bracket to avoid partial state updates
+                const newBracket = JSON.parse(JSON.stringify(bracket));
+
+                // Iterate through rounds 0 to 6
+                for (let r = 0; r < 7; r++) {
+                    const round = newBracket[r];
+                    round.forEach((match, mIndex) => {
+                        // If match has players, ALWAYS pick a winner (overwrite if needed)
+                        if (match.p1 && match.p2) {
+                            const isP1 = Math.random() < 0.5;
+                            const winner = isP1 ? match.p1 : match.p2;
+
+                            // Set winner for current match
+                            match.winner = winner.name;
+                            // Reset winner flags for clean slate locally, then set new
+                            match.p1.isWinner = false;
+                            match.p2.isWinner = false;
+
+                            if (isP1) match.p1.isWinner = true;
+                            else match.p2.isWinner = true;
+
+                            // Advance to next round
+                            const nextR = r + 1;
+                            if (nextR < 7) {
+                                const nextM = Math.floor(mIndex / 2);
+                                const isNextP1Slot = mIndex % 2 === 0;
+                                const nextMatch = newBracket[nextR][nextM];
+
+                                const advancedPlayer = { name: winner.name, isWinner: false, fromMatchId: match.id };
+
+                                if (isNextP1Slot) nextMatch.p1 = advancedPlayer;
+                                else nextMatch.p2 = advancedPlayer;
+
+                                // Reset the NEXT match's winner status to force re-evaluation in next loop iteration
+                                // (Because the player changed, the previous winner is invalid)
+                                nextMatch.winner = null;
+                                // We don't need to clear p1/p2 isWinner here because the loop will hit nextMatch later
+                                // and set them correctly based on the new random pick.
+                            }
+                        }
+                    });
+                }
+
+                setBracket(newBracket);
+                calculateScore(newBracket);
+            };
+
+            // --- Canvas / Interaction Logic ---
+            const handleWheel = (e) => {
+                if (e.ctrlKey || e.metaKey) { // Zoom
+                    e.preventDefault();
+                    const delta = -e.deltaY * 0.001;
+                    const newScale = Math.min(Math.max(0.5, scale + delta), 2);
+                    setScale(newScale);
+                }
+                // Removed Pan logic to allow native scrolling
+            };
+
+            // --- Icons ---
+            const TrophyIcon = () => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                    <path d="M4 22h16" />
+                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                </svg>
+            );
+
+            const CrownIcon = () => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-wimbledon-gold mx-auto mb-2">
+                    <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+                </svg>
+            );
+
+            if (bracket.length === 0) return <div className="flex h-screen items-center justify-center text-wimbledon-purple">Loading Bracket...</div>;
+
+            return (
+                <div className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900">
+                    {/* Header */}
+                    <header className="bg-[#0f172a] text-white shadow-lg z-20 flex-shrink-0 border-b border-gray-800">
+                        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                            <div className="flex items-center space-x-3">
+                                {/* Splash Tech Logo */}
+                                <div className="flex flex-col items-center select-none cursor-pointer" onClick={() => window.location.reload()}>
+                                    <h1 className="text-2xl font-black text-white tracking-wide leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>SPLASH</h1>
+                                    <div className="flex justify-between w-full mt-1">
+                                        <span className="text-[10px] font-bold text-cyan-400 tracking-widest leading-none w-full text-center" style={{ letterSpacing: '0.4em', marginRight: '-0.4em' }}>TECH</span>
+                                    </div>
+                                </div>
+                                <div className="h-8 w-px bg-gray-700 mx-4 hidden md:block"></div>
+                                <div className="flex flex-col justify-center hidden md:flex">
+                                    <h2 className="font-semibold text-sm leading-tight text-gray-300">2026 Wimbledon Predictor</h2>
+                                    <p className="text-[10px] text-gray-500">Gentlemen's Singles</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center space-x-6">
+                                <div className="text-center">
+                                    <span className="block text-[10px] uppercase tracking-wider opacity-70">Score</span>
+                                    <span className="text-xl font-bold text-wimbledon-gold">{score} <span className="text-xs text-gray-500">/ 127</span></span>
+                                </div>
+                                <button
+                                    className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center space-x-2"
+                                    onClick={handleRandomPick}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                    <span>Quick Pick</span>
+                                </button>
+                                <button className="hidden md:block bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-600 shadow-sm" onClick={() => window.print()}>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Content Area */}
+                    <main
+                        className="flex-1 relative overflow-auto bg-[#F3F4F6] cursor-default"
+                        onWheel={handleWheel}
+                    >
+                        {/* Mobile Tabs */}
+                        <div className="md:hidden absolute top-0 left-0 right-0 z-10 bg-white shadow-sm border-b overflow-x-auto hide-scrollbar">
+                            <div className="flex px-2 space-x-1 py-2 min-w-max">
+                                {ROUND_NAMES.map((name, idx) => (
+                                    (idx < 7) && (
+                                        <button
+                                            key={name}
+                                            onClick={(e) => { e.stopPropagation(); setActiveTab(idx); }}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${activeTab === idx
+                                                ? 'bg-wimbledon-purple text-white shadow-md'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                        >
+                                            {name}
+                                        </button>
+                                    )
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Bracket Container */}
+                        <div
+                            ref={containerRef}
+                            className={`transform origin-top-left transition-transform duration-75 ease-out p-8 ${window.innerWidth < 768 ? 'block' : 'flex'}`}
+                            style={{
+                                transform: window.innerWidth >= 768
+                                    ? `scale(${scale})`
+                                    : 'none',
+                                width: window.innerWidth >= 768 ? 'max-content' : '100%',
+                                padding: window.innerWidth < 768 ? '4rem 1rem 8rem 1rem' : undefined
+                            }}
+                        >
+                            {bracket.map((round, rIndex) => {
+                                if (window.innerWidth < 768 && activeTab !== rIndex) return null;
+                                // In desktop, show all. In mobile, show activeTab.
+
+                                return (
+                                    <div key={rIndex} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
+                                        <h3 className="hidden md:block text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 sticky top-0 bg-[#F3F4F6] pb-2 text-center">
+                                            {ROUND_NAMES[rIndex]}
+                                        </h3>
+
+                                        {/* Matches Column */}
+                                        <div
+                                            className="flex flex-col justify-around h-full"
+                                            style={{
+                                                gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem',
+                                                paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0',
+                                            }}
+                                        >
+                                            {round.map((match, mIndex) => (
+                                                <MatchCard
+                                                    key={match.id}
+                                                    match={match}
+                                                    roundIndex={rIndex}
+                                                    onSelect={(playerKey) => handleSelection(rIndex, mIndex, playerKey)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Final Winner Display for Desktop */}
+                            <div className="hidden md:flex flex-col justify-center ml-16 items-center">
+                                <div className="w-48 h-32 border-2 border-dashed border-wimbledon-gold rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center">
+                                    {bracket[6][0].winner ? (
+                                        <div>
+                                            <CrownIcon />
+                                            <span className="font-bold text-wimbledon-purple">{bracket[6][0].winner}</span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-400 text-sm">Champion</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+
+                    {/* Mobile Controls Overlay */}
+                    <div className="md:hidden fixed bottom-6 right-6 z-30">
+                        <div className="bg-wimbledon-purple text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold">
+                            Score: {score}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function MatchCard({ match, roundIndex, onSelect }) {
+            const isP1Winner = match.p1?.isWinner;
+            const isP2Winner = match.p2?.isWinner;
+
+            // Should selection be locked if previous round isn't done?
+            // Actually, p1/p2 will be null if not ready.
+
+            const p1Class = `player-slot flex justify-between items-center p-2 border-b border-gray-100 ${match.p1 ? 'selectable hover:bg-purple-50' : 'cursor-default opacity-50 bg-gray-50'
+                } ${isP1Winner ? 'bg-purple-100 border-l-4 border-wimbledon-purple' : 'pl-3'}`;
+
+            const p2Class = `player-slot flex justify-between items-center p-2 ${match.p2 ? 'selectable hover:bg-purple-50' : 'cursor-default opacity-50 bg-gray-50'
+                } ${isP2Winner ? 'bg-purple-100 border-l-4 border-wimbledon-purple' : 'pl-3'}`;
+
+            return (
+                <div className="match-card w-64 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden text-sm">
+                    <div className="flex flex-col">
+                        {/* Player 1 */}
+                        <div
+                            className={p1Class}
+                            onClick={() => match.p1 && onSelect('p1')}
+                        >
+                            <span className={`truncate font-medium ${isP1Winner ? 'text-wimbledon-purple' : 'text-gray-700'}`}>
+                                {match.p1 ? cleanName(match.p1.name) : '-'}
+                            </span>
+                            {match.p1 && <SeedBadge name={match.p1.name} />}
+                        </div>
+
+                        {/* Player 2 */}
+                        <div
+                            className={p2Class}
+                            onClick={() => match.p2 && onSelect('p2')}
+                        >
+                            <span className={`truncate font-medium ${isP2Winner ? 'text-wimbledon-purple' : 'text-gray-700'}`}>
+                                {match.p2 ? cleanName(match.p2.name) : '-'}
+                            </span>
+                            {match.p2 && <SeedBadge name={match.p2.name} />}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function cleanName(name) {
+            // Remove [1], (Q), etc for cleaner display? Or keep?
+            // "SINNER, Jannik [1]" -> "SINNER, Jannik"
+            // Let's keep the user's data format mostly but maybe bold the surname
+            return name.split('[')[0].replace('(Q)', '').replace('(W)', '').replace('(L)', '').trim();
+        }
+
+        function SeedBadge({ name }) {
+            const match = name.match(/\[(\d+)\]/);
+            if (!match) return null;
+            return (
+                <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                    {match[1]}
+                </span>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
