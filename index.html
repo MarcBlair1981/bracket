@@ -142,7 +142,31 @@
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- Data ---
-        const INITIAL_MATCHES = [
+        const HEADER_DATA = {
+            wimbledon: {
+                title: "2026 Wimbledon Predictor",
+                subtitle: "Gentlemen's Singles",
+                logoText: "SPLASH",
+                logoSub: "TECH",
+                colors: { main: '#371858', accent: '#2C6938' }
+            },
+            darts: {
+                title: "2025/26 World Darts Championship",
+                subtitle: "Paddy Power World Darts",
+                logoText: "SPLASH",
+                logoSub: "DARTS",
+                colors: { main: '#004d25', accent: '#facc15' } // Green/Gold-ish
+            },
+            custom: {
+                title: "Custom Bracket",
+                subtitle: "User Uploaded",
+                logoText: "YOUR",
+                logoSub: "BRACKET",
+                colors: { main: '#1e293b', accent: '#3b82f6' }
+            }
+        };
+
+        const WIMBLEDON_MATCHES = [
             { "match_id": 1, "p1": "SINNER, Jannik [1]", "p2": "NARDI, Luca" },
             { "match_id": 2, "p1": "TSENG, Chun-Hsin", "p2": "VUKIC, Aleksandar" },
             { "match_id": 3, "p1": "MARTINEZ, Pedro", "p2": "LOFFHAGEN, George (W)" },
@@ -209,84 +233,157 @@
             { "match_id": 64, "p1": "FOGNINI, Fabio", "p2": "ALCARAZ, Carlos [2]" }
         ];
 
-        const ROUND_NAMES = ["Round 1", "Round 2", "Round 3", "Round 4", "Quarter-finals", "Semi-finals", "Final", "Winner"];
+        const DARTS_MATCHES = [
+            { "match_id": 1, "p1": "Michael van Gerwen [3]", "p2": "Mitsuhiko Tatsunami" },
+            { "match_id": 2, "p1": "William O'Connor", "p2": "Krzysztof Kciuk" },
+            { "match_id": 3, "p1": "Peter Wright [30]", "p2": "Noa-Lynn van Leuven" },
+            { "match_id": 4, "p1": "Kim Huybrechts", "p2": "Arno Merk" },
+            { "match_id": 5, "p1": "Gary Anderson [14]", "p2": "Adam Hunt" },
+            { "match_id": 6, "p1": "Connor Scutt", "p2": "Simon Whitlock" },
+            { "match_id": 7, "p1": "Jermaine Wattimena [19]", "p2": "Dominik Gruellich" },
+            { "match_id": 8, "p1": "Scott Williams", "p2": "Paolo Nebrida" },
+            { "match_id": 9, "p1": "Danny Noppert [6]", "p2": "Jurjen van der Velde" },
+            { "match_id": 10, "p1": "Nick Kenny", "p2": "Justin Hood" },
+            { "match_id": 11, "p1": "Ritchie Edhouse [27]", "p2": "Jonny Tata" },
+            { "match_id": 12, "p1": "Ryan Meikle", "p2": "Jesus Salate" },
+            { "match_id": 13, "p1": "Josh Rock [11]", "p2": "Gemma Hayter" },
+            { "match_id": 14, "p1": "Niko Springer", "p2": "Joe Comito" },
+            { "match_id": 15, "p1": "Daryl Gurney [22]", "p2": "Beau Greaves" },
+            { "match_id": 16, "p1": "Callan Rydz", "p2": "Patrik Kovacs" }
+        ];
+
+        const TOURNAMENTS = {
+            wimbledon: WIMBLEDON_MATCHES,
+            darts: DARTS_MATCHES
+        };
+
+
 
         // --- Components ---
 
         function App() {
-            // State: bracket[roundIndex][matchIndex] = { p1, p2, winner }
-            // bracket is an array of 7 arrays (R1..Final)
+            const [selectedTournament, setSelectedTournament] = useState('wimbledon');
+            const [customMatches, setCustomMatches] = useState(null);
             const [bracket, setBracket] = useState([]);
             const [score, setScore] = useState(0);
-            const [activeTab, setActiveTab] = useState(0); // For mobile view
-
-            // Pan & Zoom State
+            const [activeTab, setActiveTab] = useState(0);
             const [scale, setScale] = useState(1);
             const containerRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            // Derived Data for current selection
+            const activeData = useMemo(() => {
+                if (selectedTournament === 'custom' && customMatches) return customMatches;
+                return TOURNAMENTS[selectedTournament] || [];
+            }, [selectedTournament, customMatches]);
+
+            const headerInfo = HEADER_DATA[selectedTournament] || HEADER_DATA.wimbledon;
 
             // Initialize Bracket
             useEffect(() => {
+                if (activeData.length === 0) return;
+
+                // Determine Total Rounds based on match count
+                // 64 matches = 128 players = 7 rounds (including winner)
+                // 32 matches = 64 players = 6 rounds
+                // 16 matches = 32 players = 5 rounds
+                const matchCount = activeData.length;
+                const totalRounds = Math.ceil(Math.log2(matchCount * 2));
+                // e.g. 16 matches -> 32 players -> log2(32) = 5.
+
                 const rounds = [];
-                // Round 1: 64 matches
-                const r1 = INITIAL_MATCHES.map(m => ({
-                    id: `r1-${m.match_id}`,
+                // Round 1
+                const r1 = activeData.map((m, i) => ({
+                    id: `r1-${i}`, // Use index to be safe
                     p1: { name: m.p1, isWinner: false },
                     p2: { name: m.p2, isWinner: false },
-                    winner: null
+                    winner: null,
+                    originalMatchId: m.match_id
                 }));
                 rounds.push(r1);
 
-                // Round 2: 32 matches
-                rounds.push(createEmptyRound(32, 2));
-                // Round 3: 16 matches
-                rounds.push(createEmptyRound(16, 3));
-                // Round 4: 8 matches
-                rounds.push(createEmptyRound(8, 4));
-                // QF: 4 matches
-                rounds.push(createEmptyRound(4, 5));
-                // SF: 2 matches
-                rounds.push(createEmptyRound(2, 6));
-                // Final: 1 match
-                rounds.push(createEmptyRound(1, 7));
+                // Create subsequent empty rounds
+                let currentCount = matchCount;
+                for (let r = 2; r <= totalRounds; r++) {
+                    currentCount = currentCount / 2;
+                    rounds.push(createEmptyRound(currentCount, r));
+                }
 
-                // Winner slot (technically not a match, but useful for state)
-                // We'll handle winner separately or as a "virtual" round 8
+                // Add Winner "Round" slot (handled visually as 1 match with 1 slot usually, 
+                // but the logic here uses rounds ending at Final match).
+                // If totalRounds=5, we have R1, R2, R3, R4(Semi), R5(Final).
 
                 setBracket(rounds);
-            }, []);
+                setScore(0);
+                setActiveTab(0);
+
+            }, [activeData]);
 
             function createEmptyRound(count, roundNum) {
                 return Array(count).fill(null).map((_, i) => ({
                     id: `r${roundNum}-${i + 1}`,
-                    p1: null, // { name: "...", isWinner: false }
+                    p1: null,
                     p2: null,
                     winner: null
                 }));
             }
 
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const text = evt.target.result;
+                    const lines = text.split('\n');
+                    const parsed = [];
+                    // Expect: MatchID, P1, P2
+                    // Skip header if present (check if first line has "Player")
+                    const startIndex = lines[0].toLowerCase().includes('player') ? 1 : 0;
+
+                    for (let i = startIndex; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        // Handle CSV lines ensuring we split correctly (simple split for now)
+                        const cols = line.split(',');
+                        if (cols.length >= 3) {
+                            parsed.push({
+                                match_id: cols[0].trim(),
+                                p1: cols[1].trim(),
+                                p2: cols[2].trim()
+                            });
+                        }
+                    }
+
+                    if (parsed.length > 0) {
+                        setCustomMatches(parsed);
+                        setSelectedTournament('custom');
+                    } else {
+                        alert("Could not parse CSV. Ensure format: MatchID, Player1, Player2");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
             const handleSelection = (roundIndex, matchIndex, playerKey) => {
-                if (roundIndex >= 7) return; // Winner picked logic handled elsewhere if needed
+                // Determine max rounds dynamically
+                const maxRounds = bracket.length;
+                if (roundIndex >= maxRounds) return;
 
                 const newBracket = [...bracket];
                 const currentMatch = { ...newBracket[roundIndex][matchIndex] };
 
-                // If this match is not ready (missing players), do nothing
                 if (!currentMatch.p1 || !currentMatch.p2) return;
 
                 const selectedPlayer = currentMatch[playerKey];
-                const opponentKey = playerKey === 'p1' ? 'p2' : 'p1';
 
-                // Toggle logic or Selection logic?
-                // Simple selection: Click advances.
-
-                // Update current match winner status (visual only)
                 currentMatch.p1 = { ...currentMatch.p1, isWinner: playerKey === 'p1' };
                 currentMatch.p2 = { ...currentMatch.p2, isWinner: playerKey === 'p2' };
                 currentMatch.winner = selectedPlayer.name;
 
                 newBracket[roundIndex][matchIndex] = currentMatch;
 
-                // Advance to next round
+                // Advance
                 const nextRoundIndex = roundIndex + 1;
                 if (nextRoundIndex < newBracket.length) {
                     const nextMatchIndex = Math.floor(matchIndex / 2);
@@ -295,21 +392,13 @@
                     const nextMatch = { ...newBracket[nextRoundIndex][nextMatchIndex] };
                     const advancedPlayer = { name: selectedPlayer.name, isWinner: false, fromMatchId: currentMatch.id };
 
-                    if (isNextP1) {
-                        nextMatch.p1 = advancedPlayer;
-                    } else {
-                        nextMatch.p2 = advancedPlayer;
-                    }
+                    if (isNextP1) nextMatch.p1 = advancedPlayer;
+                    else nextMatch.p2 = advancedPlayer;
 
-                    // Reset winner if one was already picked in the destination match because the matchup changed
-                    // (Optional: keep if same player, but safer to reset to force re-pick)
                     if (nextMatch.winner) {
-                        // Recursive clear forward flow could be implemented here
-                        // For simplicity, just unselect winner in next match but keep the other player
                         nextMatch.winner = null;
                         if (nextMatch.p1) nextMatch.p1.isWinner = false;
                         if (nextMatch.p2) nextMatch.p2.isWinner = false;
-                        // And clear the round after that... 
                         clearFutureRounds(newBracket, nextRoundIndex, nextMatchIndex);
                     }
 
@@ -365,30 +454,26 @@
 
             // --- Random Pick Logic ---
             const handleRandomPick = () => {
-                // Deep clone the bracket to avoid partial state updates
                 const newBracket = JSON.parse(JSON.stringify(bracket));
+                const totalRounds = newBracket.length;
 
-                // Iterate through rounds 0 to 6
-                for (let r = 0; r < 7; r++) {
+                // Iterate through available rounds
+                for (let r = 0; r < totalRounds; r++) {
                     const round = newBracket[r];
                     round.forEach((match, mIndex) => {
-                        // If match has players, ALWAYS pick a winner (overwrite if needed)
                         if (match.p1 && match.p2) {
                             const isP1 = Math.random() < 0.5;
                             const winner = isP1 ? match.p1 : match.p2;
 
-                            // Set winner for current match
                             match.winner = winner.name;
-                            // Reset winner flags for clean slate locally, then set new
                             match.p1.isWinner = false;
                             match.p2.isWinner = false;
 
                             if (isP1) match.p1.isWinner = true;
                             else match.p2.isWinner = true;
 
-                            // Advance to next round
                             const nextR = r + 1;
-                            if (nextR < 7) {
+                            if (nextR < totalRounds) {
                                 const nextM = Math.floor(mIndex / 2);
                                 const isNextP1Slot = mIndex % 2 === 0;
                                 const nextMatch = newBracket[nextR][nextM];
@@ -398,11 +483,7 @@
                                 if (isNextP1Slot) nextMatch.p1 = advancedPlayer;
                                 else nextMatch.p2 = advancedPlayer;
 
-                                // Reset the NEXT match's winner status to force re-evaluation in next loop iteration
-                                // (Because the player changed, the previous winner is invalid)
                                 nextMatch.winner = null;
-                                // We don't need to clear p1/p2 isWinner here because the loop will hit nextMatch later
-                                // and set them correctly based on the new random pick.
                             }
                         }
                     });
@@ -436,39 +517,66 @@
             );
 
             const CrownIcon = () => (
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-wimbledon-gold mx-auto mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 opacity-50 mx-auto mb-2" style={{ color: headerInfo.colors.accent }}>
                     <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
                 </svg>
             );
 
-            if (bracket.length === 0) return <div className="flex h-screen items-center justify-center text-wimbledon-purple">Loading Bracket...</div>;
+            if (bracket.length === 0) return <div className="flex h-screen items-center justify-center font-bold" style={{ color: headerInfo.colors.main }}>Loading Bracket...</div>;
 
             return (
                 <div className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900">
                     {/* Header */}
-                    <header className="bg-[#0f172a] text-white shadow-lg z-20 flex-shrink-0 border-b border-gray-800">
+                    <header className="text-white shadow-lg z-20 flex-shrink-0 border-b border-gray-800 transition-colors duration-500" style={{ backgroundColor: headerInfo.colors.main }}>
                         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
                             <div className="flex items-center space-x-3">
                                 {/* Splash Tech Logo */}
                                 <div className="flex flex-col items-center select-none cursor-pointer" onClick={() => window.location.reload()}>
-                                    <h1 className="text-2xl font-black text-white tracking-wide leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>SPLASH</h1>
+                                    <h1 className="text-2xl font-black text-white tracking-wide leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>{headerInfo.logoText}</h1>
                                     <div className="flex justify-between w-full mt-1">
-                                        <span className="text-[10px] font-bold text-cyan-400 tracking-widest leading-none w-full text-center" style={{ letterSpacing: '0.4em', marginRight: '-0.4em' }}>TECH</span>
+                                        <span className="text-[10px] font-bold tracking-widest leading-none w-full text-center" style={{ letterSpacing: '0.4em', marginRight: '-0.4em', color: headerInfo.colors.accent }}>{headerInfo.logoSub}</span>
                                     </div>
                                 </div>
                                 <div className="h-8 w-px bg-gray-700 mx-4 hidden md:block"></div>
                                 <div className="flex flex-col justify-center hidden md:flex">
-                                    <h2 className="font-semibold text-sm leading-tight text-gray-300">2026 Wimbledon Predictor</h2>
-                                    <p className="text-[10px] text-gray-500">Gentlemen's Singles</p>
+                                    <h2 className="font-semibold text-sm leading-tight text-gray-200">{headerInfo.title}</h2>
+                                    <p className="text-[10px] text-gray-400">{headerInfo.subtitle}</p>
+                                </div>
+
+                                {/* Tournament Switcher */}
+                                <div className="ml-8 hidden md:block">
+                                    <select
+                                        className="bg-black/30 text-white text-xs rounded px-2 py-1 border border-white/20 outline-none hover:bg-black/50 transition-colors"
+                                        value={selectedTournament}
+                                        onChange={(e) => {
+                                            if (e.target.value === 'upload') {
+                                                fileInputRef.current.click();
+                                            } else {
+                                                setSelectedTournament(e.target.value);
+                                            }
+                                        }}
+                                    >
+                                        <option value="wimbledon">Wimbledon '26</option>
+                                        <option value="darts">World Darts</option>
+                                        <option value="upload">📂 Upload CSV...</option>
+                                        {selectedTournament === 'custom' && <option value="custom">Custom Bracket</option>}
+                                    </select>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        accept=".csv"
+                                        onChange={handleFileUpload}
+                                    />
                                 </div>
                             </div>
                             <div className="flex items-center space-x-6">
                                 <div className="text-center">
                                     <span className="block text-[10px] uppercase tracking-wider opacity-70">Score</span>
-                                    <span className="text-xl font-bold text-wimbledon-gold">{score} <span className="text-xs text-gray-500">/ 127</span></span>
+                                    <span className="text-xl font-bold" style={{ color: headerInfo.colors.accent }}>{score} <span className="text-xs text-gray-500">/ {activeData.length * 2 - 1}</span></span>
                                 </div>
                                 <button
-                                    className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center space-x-2"
+                                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center space-x-2 border border-white/10"
                                     onClick={handleRandomPick}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
@@ -489,20 +597,32 @@
                         {/* Mobile Tabs */}
                         <div className="md:hidden absolute top-0 left-0 right-0 z-10 bg-white shadow-sm border-b overflow-x-auto hide-scrollbar">
                             <div className="flex px-2 space-x-1 py-2 min-w-max">
-                                {ROUND_NAMES.map((name, idx) => (
-                                    (idx < 7) && (
+                                {bracket.map((_, idx) => {
+                                    // Make sure we don't show the "winner" round if it existed as a separate entity, 
+                                    // but our bracket logic puts winner in the Final match object, so rounds array corresponds to actual playable rounds.
+                                    let label = `R${idx + 1}`;
+                                    if (idx === bracket.length - 1) label = "Final";
+                                    else if (idx === bracket.length - 2) label = "SF";
+                                    else if (idx === bracket.length - 3) label = "QF";
+
+                                    return (
                                         <button
-                                            key={name}
+                                            key={idx}
                                             onClick={(e) => { e.stopPropagation(); setActiveTab(idx); }}
                                             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${activeTab === idx
                                                 ? 'bg-wimbledon-purple text-white shadow-md'
                                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                 }`}
+                                            // Override color for active tab based on selected tournament? 
+                                            // The wimbledon-purple class is hardcoded in tailwind colors, 
+                                            // for true dynamic styling we'd need inline styles or dynamic class generation.
+                                            // For simplicity, we keep wimbledon-purple or generic.
+                                            style={activeTab === idx ? { backgroundColor: headerInfo.colors.main } : {}}
                                         >
-                                            {name}
+                                            {label}
                                         </button>
-                                    )
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -520,12 +640,21 @@
                         >
                             {bracket.map((round, rIndex) => {
                                 if (window.innerWidth < 768 && activeTab !== rIndex) return null;
-                                // In desktop, show all. In mobile, show activeTab.
+
+                                // Dynamic Round Label
+                                let roundLabel = `Round ${rIndex + 1}`;
+                                const isFinal = rIndex === bracket.length - 1;
+                                const isSemi = rIndex === bracket.length - 2;
+                                const isQuarter = rIndex === bracket.length - 3;
+
+                                if (isFinal) roundLabel = "Final";
+                                else if (isSemi) roundLabel = "Semi-finals";
+                                else if (isQuarter) roundLabel = "Quarter-finals";
 
                                 return (
                                     <div key={rIndex} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
                                         <h3 className="hidden md:block text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 sticky top-0 bg-[#F3F4F6] pb-2 text-center">
-                                            {ROUND_NAMES[rIndex]}
+                                            {roundLabel}
                                         </h3>
 
                                         {/* Matches Column */}
@@ -551,11 +680,11 @@
 
                             {/* Final Winner Display for Desktop */}
                             <div className="hidden md:flex flex-col justify-center ml-16 items-center">
-                                <div className="w-48 h-32 border-2 border-dashed border-wimbledon-gold rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center">
-                                    {bracket[6][0].winner ? (
+                                <div className="w-48 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center" style={{ borderColor: headerInfo.colors.accent }}>
+                                    {bracket.length > 0 && bracket[bracket.length - 1][0].winner ? (
                                         <div>
                                             <CrownIcon />
-                                            <span className="font-bold text-wimbledon-purple">{bracket[6][0].winner}</span>
+                                            <span className="font-bold text-lg" style={{ color: headerInfo.colors.main }}>{bracket[bracket.length - 1][0].winner}</span>
                                         </div>
                                     ) : (
                                         <span className="text-gray-400 text-sm">Champion</span>
