@@ -324,6 +324,7 @@
             const [score, setScore] = useState(0);
             const [activeTab, setActiveTab] = useState(0);
             const [scale, setScale] = useState(1);
+            const [showInfo, setShowInfo] = useState(false);
             const containerRef = useRef(null);
             const fileInputRef = useRef(null);
 
@@ -632,6 +633,13 @@
                                     <span className="text-xl font-bold" style={{ color: headerInfo.colors.accent }}>{score} <span className="text-xs text-gray-500">/ {activeData.length * 2 - 1}</span></span>
                                 </div>
                                 <button
+                                    className="text-white/70 hover:text-white px-2 transition-colors"
+                                    onClick={() => setShowInfo(true)}
+                                    title="Instructions & Info"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                </button>
+                                <button
                                     className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center space-x-2 border border-white/10"
                                     onClick={handleRandomPick}
                                 >
@@ -756,6 +764,61 @@
                             Score: {score}
                         </div>
                     </div>
+
+                    {/* Info Modal */}
+                    {showInfo && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
+                            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 relative" onClick={e => e.stopPropagation()}>
+                                <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600" onClick={() => setShowInfo(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Bracket Platform Info</h3>
+                                <p className="text-sm text-gray-500 mb-6">Version 2.1 • Powered by Splash Tech</p>
+
+                                <div className="space-y-6">
+                                    <section>
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">Supported Brackets</h4>
+                                        <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                                            <li><strong>Standard Single Elimination</strong>: 4, 8, 16, 32, 64, or 128 players.</li>
+                                            <li><strong>Extended Format</strong>: 96 Players (e.g. World Darts) with 32 Seeds + 64 Qualifiers.</li>
+                                        </ul>
+                                    </section>
+
+                                    <section>
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">How to Upload Data</h4>
+                                        <p className="text-sm text-gray-700 mb-2">You can upload your own bracket using a <strong>.CSV</strong> file.</p>
+                                        <div className="bg-gray-100 p-3 rounded text-xs font-mono text-gray-600 mb-2 overflow-x-auto">
+                                            MatchID, Player1, Player2<br />
+                                            1, Novak Djokovic, Andy Murray<br />
+                                            2, Rafael Nadal, Roger Federer<br />
+                                            ...
+                                        </div>
+                                        <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
+                                            <li><strong>MatchID</strong>: Number matches explicitly (1, 2, 3...)</li>
+                                            <li><strong>Order</strong>: Match 1 winner plays Match 2 winner in next round.</li>
+                                            <li>To add a <strong>BYE</strong> (auto-advance), set Player2 to "BYE".</li>
+                                        </ul>
+                                    </section>
+
+                                    <section>
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">Controls</h4>
+                                        <ul className="text-sm text-gray-700 space-y-1">
+                                            <li><strong>Click Payer</strong>: Advances them to next round.</li>
+                                            <li><strong>Quick Pick</strong>: Randomly simulates the rest of the bracket. Click again to Redraw.</li>
+                                            <li><strong>Scroll/Zoom</strong>: Use mouse wheel (hold Ctrl to Zoom).</li>
+                                        </ul>
+                                    </section>
+                                </div>
+
+                                <div className="mt-8 pt-4 border-t text-center">
+                                    <button className="bg-gray-900 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-800 transition" onClick={() => setShowInfo(false)}>
+                                        Got it
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
