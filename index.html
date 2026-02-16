@@ -174,6 +174,14 @@
                 logoText: "YOUR",
                 logoSub: "BRACKET",
                 colors: { main: '#1e293b', accent: '#3b82f6' }
+            },
+            pl: {
+                type: 'ranking',
+                title: "Premier League 25/26",
+                subtitle: "League Table Prediction",
+                logoText: "PREMIER",
+                logoSub: "LEAGUE",
+                colors: { main: '#38003c', accent: '#00ff85' } // Iconic Purple/Green
             }
         };
 
@@ -342,10 +350,34 @@
             { id: 'had', name: "Isack Hadjar", team: "RB", rank: 20 }
         ];
 
+        const PREMIER_LEAGUE_TEAMS = [
+            { id: 'ars', name: "Arsenal", team: "London", rank: 1 },
+            { id: 'liv', name: "Liverpool", team: "Merseyside", rank: 2 },
+            { id: 'mci', name: "Manchester City", team: "Manchester", rank: 3 },
+            { id: 'nfo', name: "Nottingham Forest", team: "Nottingham", rank: 4 },
+            { id: 'che', name: "Chelsea", team: "London", rank: 5 },
+            { id: 'bou', name: "Bournemouth", team: "Bournemouth", rank: 6 },
+            { id: 'new', name: "Newcastle United", team: "Newcastle", rank: 7 },
+            { id: 'avl', name: "Aston Villa", team: "Birmingham", rank: 8 },
+            { id: 'bha', name: "Brighton", team: "Brighton", rank: 9 },
+            { id: 'ful', name: "Fulham", team: "London", rank: 10 },
+            { id: 'bre', name: "Brentford", team: "London", rank: 11 },
+            { id: 'tot', name: "Tottenham Hotspur", team: "London", rank: 12 },
+            { id: 'mun', name: "Manchester United", team: "Manchester", rank: 13 },
+            { id: 'whu', name: "West Ham United", team: "London", rank: 14 },
+            { id: 'cry', name: "Crystal Palace", team: "London", rank: 15 },
+            { id: 'eve', name: "Everton", team: "Liverpool", rank: 16 },
+            { id: 'wol', name: "Wolverhampton", team: "Wolverhampton", rank: 17 },
+            { id: 'ips', name: "Ipswich Town", team: "Ipswich", rank: 18 },
+            { id: 'lei', name: "Leicester City", team: "Leicester", rank: 19 },
+            { id: 'sou', name: "Southampton", team: "Southampton", rank: 20 }
+        ];
+
         const TOURNAMENTS = {
             wimbledon: WIMBLEDON_MATCHES,
             darts: DARTS_MATCHES,
-            f1: F1_DRIVERS
+            f1: F1_DRIVERS,
+            pl: PREMIER_LEAGUE_TEAMS
         };
 
 
@@ -427,6 +459,23 @@
                 }));
             }
 
+            useEffect(() => {
+                const savedBracket = localStorage.getItem('savedCustomBracket');
+                const savedType = localStorage.getItem('savedCustomType');
+                if (savedBracket) {
+                    try {
+                        const parsed = JSON.parse(savedBracket);
+                        setCustomMatches(parsed);
+                        if (savedType) {
+                            HEADER_DATA.custom.type = savedType;
+                        }
+                        setSelectedTournament('custom');
+                    } catch (e) {
+                        console.error("Failed to load saved bracket", e);
+                    }
+                }
+            }, []);
+
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -436,29 +485,53 @@
                     const text = evt.target.result;
                     const lines = text.split('\n');
                     const parsed = [];
-                    // Expect: MatchID, P1, P2
-                    // Skip header if present (check if first line has "Player")
-                    const startIndex = lines[0].toLowerCase().includes('player') ? 1 : 0;
+                    let detectedType = 'elimination'; // Default
+
+                    // Heuristic: Check first valid line via columns
+                    // 3+ columns = Bracket (MatchID, P1, P2)
+                    // 2 columns = Ranking (Id/Rank, Name)
+
+                    const startIndex = lines[0].toLowerCase().includes('player') || lines[0].toLowerCase().includes('team') ? 1 : 0;
+                    let columnCount = 0;
 
                     for (let i = startIndex; i < lines.length; i++) {
                         const line = lines[i].trim();
                         if (!line) continue;
-                        // Handle CSV lines ensuring we split correctly (simple split for now)
+
                         const cols = line.split(',');
+                        if (columnCount === 0) columnCount = cols.length;
+
                         if (cols.length >= 3) {
                             parsed.push({
                                 match_id: cols[0].trim(),
                                 p1: cols[1].trim(),
                                 p2: cols[2].trim()
                             });
+                        } else if (cols.length === 2) {
+                            parsed.push({
+                                id: cols[0].trim(),
+                                name: cols[1].trim(),
+                                team: "User Upload", // Generic team name
+                                rank: cols[0].trim()
+                            });
                         }
+                    }
+
+                    if (columnCount < 3) {
+                        detectedType = 'ranking';
                     }
 
                     if (parsed.length > 0) {
                         setCustomMatches(parsed);
+                        HEADER_DATA.custom.type = detectedType;
+
+                        // Save to LocalStorage
+                        localStorage.setItem('savedCustomBracket', JSON.stringify(parsed));
+                        localStorage.setItem('savedCustomType', detectedType);
+
                         setSelectedTournament('custom');
                     } else {
-                        alert("Could not parse CSV. Ensure format: MatchID, Player1, Player2");
+                        alert("Could not parse CSV. Ensure format: MatchID, Player1, Player2 (for bracket) OR Rank, Name (for list)");
                     }
                 };
                 reader.readAsText(file);
@@ -669,6 +742,7 @@
                                         <option value="wimbledon">Wimbledon '26</option>
                                         <option value="darts">World Darts</option>
                                         <option value="f1">Formula 1 '26</option>
+                                        <option value="pl">Premier League 25/26</option>
                                         <option value="upload">📂 Upload CSV...</option>
                                         {selectedTournament === 'custom' && <option value="custom">Custom Bracket</option>}
                                     </select>
