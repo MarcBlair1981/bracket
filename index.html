@@ -182,11 +182,21 @@
                 logoText: "PREMIER",
                 logoSub: "LEAGUE",
                 colors: { main: '#38003c', accent: '#00ff85' } // Iconic Purple/Green
+            },
+            splash1: {
+                type: 'elimination',
+                title: "SPLASH1",
+                subtitle: "User Uploaded",
+                logoText: "YOUR",
+                logoSub: "BRACKET",
+                colors: { main: '#333333', accent: '#ffffff' }
             }
         };
 
         const WIMBLEDON_MATCHES = [
+            // ... (matches)
             { "match_id": 1, "p1": "SINNER, Jannik [1]", "p2": "NARDI, Luca" },
+
             { "match_id": 2, "p1": "TSENG, Chun-Hsin", "p2": "VUKIC, Aleksandar" },
             { "match_id": 3, "p1": "MARTINEZ, Pedro", "p2": "LOFFHAGEN, George (W)" },
             { "match_id": 4, "p1": "NAVONE, Mariano [27]", "p2": "SHAPOVALOV, Denis" },
@@ -373,11 +383,23 @@
             { id: 'sou', name: "Southampton", team: "Promoted (Rank 4)", rank: 20 }
         ];
 
+        const SPLASH1_DATA = [
+            { "match_id": "1", "p1": "Adam", "p2": "Ricky" },
+            { "match_id": "2", "p1": "Iryna", "p2": "Jack" },
+            { "match_id": "3", "p1": "Jose", "p2": "Lorraine" },
+            { "match_id": "4", "p1": "Bonham", "p2": "Liliia" },
+            { "match_id": "5", "p1": "Marko", "p2": "Nicholas" },
+            { "match_id": "6", "p1": "Marc", "p2": "Nemanja" },
+            { "match_id": "7", "p1": "Paul", "p2": "Nicholas" },
+            { "match_id": "8", "p1": "Hugo", "p2": "Malynka" }
+        ];
+
         const TOURNAMENTS = {
             wimbledon: WIMBLEDON_MATCHES,
             darts: DARTS_MATCHES,
             f1: F1_DRIVERS,
-            pl: PREMIER_LEAGUE_TEAMS
+            pl: PREMIER_LEAGUE_TEAMS,
+            splash1: SPLASH1_DATA
         };
 
 
@@ -925,6 +947,7 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
                                         <option value="darts">World Darts</option>
                                         <option value="f1">Formula 1 '26</option>
                                         <option value="pl">Premier League 25/26</option>
+                                        <option value="splash1">SPLASH1</option>
                                         <option value="upload">📂 Upload CSV...</option>
                                         {customMatches && <option value="custom">{HEADER_DATA.custom.title}</option>}
                                     </select>
