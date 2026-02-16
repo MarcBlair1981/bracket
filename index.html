@@ -926,7 +926,7 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
                                         <option value="f1">Formula 1 '26</option>
                                         <option value="pl">Premier League 25/26</option>
                                         <option value="upload">📂 Upload CSV...</option>
-                                        {selectedTournament === 'custom' && <option value="custom">Custom Bracket</option>}
+                                        {customMatches && <option value="custom">{HEADER_DATA.custom.title}</option>}
                                     </select>
                                     <input
                                         type="file"
