@@ -371,9 +371,16 @@
 
             const headerInfo = HEADER_DATA[selectedTournament] || HEADER_DATA.wimbledon;
 
-            // Initialize Bracket
+            // Initialize Bracket / List
             useEffect(() => {
-                if (activeData.length === 0) return;
+                if (!activeData || activeData.length === 0) return;
+
+                if (headerInfo.type === 'ranking') {
+                    // For ranking, just set the list directly
+                    setBracket(JSON.parse(JSON.stringify(activeData)));
+                    setScore(0);
+                    return;
+                }
 
                 // Determine Total Rounds based on match count
                 // 64 matches = 128 players = 7 rounds (including winner)
