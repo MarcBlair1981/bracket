@@ -384,348 +384,413 @@
 
         // --- Components ---
 
-        const [showCustomSetup, setShowCustomSetup] = useState(false);
-        const [pendingCustomData, setPendingCustomData] = useState(null);
-        const [customConfig, setCustomConfig] = useState({
-            title: "Custom Bracket",
-            subtitle: "User Uploaded",
-            type: 'elimination',
-            logoText: "YOUR",
-            logoSub: "BRACKET"
-        });
+        function App() {
+            // Core State
+            const [selectedTournament, setSelectedTournament] = useState('wimbledon');
+            const [customMatches, setCustomMatches] = useState(null);
+            const [bracket, setBracket] = useState([]);
+            const [score, setScore] = useState(0);
+            const [activeTab, setActiveTab] = useState(0);
+            const [scale, setScale] = useState(1);
+            const [showInfo, setShowInfo] = useState(false);
+            const containerRef = useRef(null);
+            const fileInputRef = useRef(null);
 
-        // ... (rest of state) ...
-
-        // Updated File Upload Handler
-        const handleFileUpload = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                const text = evt.target.result;
-                const lines = text.split('\n');
-                const parsed = [];
-                let detectedType = 'elimination'; // Default
-
-                const startIndex = lines[0].toLowerCase().includes('player') || lines[0].toLowerCase().includes('team') ? 1 : 0;
-                let columnCount = 0;
-
-                for (let i = startIndex; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-
-                    const cols = line.split(',');
-                    if (columnCount === 0) columnCount = cols.length;
-
-                    if (cols.length >= 3) {
-                        parsed.push({
-                            match_id: cols[0].trim(),
-                            p1: cols[1].trim(),
-                            p2: cols[2].trim()
-                        });
-                    } else if (cols.length === 2) {
-                        parsed.push({
-                            id: cols[0].trim(),
-                            name: cols[1].trim(),
-                            team: "User Upload", // Generic team name
-                            rank: cols[0].trim()
-                        });
-                    }
-                }
-
-                if (columnCount < 3) {
-                    detectedType = 'ranking';
-                }
-
-                if (parsed.length > 0) {
-                    setPendingCustomData(parsed);
-                    setCustomConfig(prev => ({ ...prev, type: detectedType, title: file.name.replace('.csv', '') }));
-                    setShowCustomSetup(true);
-                    // Reset file input so same file can be selected again if cancelled
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                } else {
-                    alert("Could not parse CSV. Ensure format: MatchID, Player1, Player2 (for bracket) OR Rank, Name (for list)");
-                }
-            };
-            reader.readAsText(file);
-        };
-
-        const confirmCustomSetup = () => {
-            if (!pendingCustomData) return;
-
-            // Update global HEADER_DATA.custom reference carefully
-            HEADER_DATA.custom.title = customConfig.title;
-            HEADER_DATA.custom.subtitle = customConfig.subtitle;
-            HEADER_DATA.custom.type = customConfig.type;
-            HEADER_DATA.custom.logoText = customConfig.logoText;
-            HEADER_DATA.custom.logoSub = customConfig.logoSub;
-
-            setCustomMatches(pendingCustomData);
-
-            // Save to LocalStorage including CONFIG
-            localStorage.setItem('savedCustomBracket', JSON.stringify(pendingCustomData));
-            localStorage.setItem('savedCustomConfig', JSON.stringify(customConfig));
-
-            setSelectedTournament('custom');
-            setShowCustomSetup(false);
-        };
-
-        // Load Saved Config on Mount
-        useEffect(() => {
-            const savedBracket = localStorage.getItem('savedCustomBracket');
-            const savedConfig = localStorage.getItem('savedCustomConfig');
-
-            if (savedBracket) {
-                try {
-                    const parsed = JSON.parse(savedBracket);
-                    setCustomMatches(parsed);
-
-                    if (savedConfig) {
-                        const config = JSON.parse(savedConfig);
-                        HEADER_DATA.custom.title = config.title;
-                        HEADER_DATA.custom.subtitle = config.subtitle;
-                        HEADER_DATA.custom.type = config.type;
-                        HEADER_DATA.custom.logoText = config.logoText;
-                        HEADER_DATA.custom.logoSub = config.logoSub;
-                    }
-
-                    // Only select custom if explicitly requested or let user choose? 
-                    // For now, load it into state but let user select from dropdown manually 
-                    // unless we want auto-load. Auto-load might be confusing if they refresh.
-                    // Let's stick to "it's available in dropdown".
-                    // Wait, previous logic auto-selected it. Let's keep that but careful.
-                    // Actually, let's NOT auto-select on refresh, just make it available.
-                    // But user expects persistence. So let's auto-select 'custom' if it was last selected?
-                    // Too complex for now. Just populate data so "Custom Bracket" option works.
-                    if (localStorage.getItem('lastSelectedTournament') === 'custom') {
-                        setSelectedTournament('custom');
-                    }
-
-                } catch (e) {
-                    console.error("Failed to load saved bracket", e);
-                }
-            }
-        }, []);
-
-        // Save last selected tournament
-        useEffect(() => {
-            localStorage.setItem('lastSelectedTournament', selectedTournament);
-        }, [selectedTournament]);
-
-        const handleSelection = (roundIndex, matchIndex, playerKey) => {
-            // Determine max rounds dynamically
-            const maxRounds = bracket.length;
-            if (roundIndex >= maxRounds) return;
-
-            const newBracket = [...bracket];
-            const currentMatch = { ...newBracket[roundIndex][matchIndex] };
-
-            if (!currentMatch.p1 || !currentMatch.p2) return;
-
-            const selectedPlayer = currentMatch[playerKey];
-
-            currentMatch.p1 = { ...currentMatch.p1, isWinner: playerKey === 'p1' };
-            currentMatch.p2 = { ...currentMatch.p2, isWinner: playerKey === 'p2' };
-            currentMatch.winner = selectedPlayer.name;
-
-            newBracket[roundIndex][matchIndex] = currentMatch;
-
-            // Advance
-            const nextRoundIndex = roundIndex + 1;
-            if (nextRoundIndex < newBracket.length) {
-                const nextMatchIndex = Math.floor(matchIndex / 2);
-                const isNextP1 = matchIndex % 2 === 0;
-
-                const nextMatch = { ...newBracket[nextRoundIndex][nextMatchIndex] };
-                const advancedPlayer = { name: selectedPlayer.name, isWinner: false, fromMatchId: currentMatch.id };
-
-                if (isNextP1) nextMatch.p1 = advancedPlayer;
-                else nextMatch.p2 = advancedPlayer;
-
-                if (nextMatch.winner) {
-                    nextMatch.winner = null;
-                    if (nextMatch.p1) nextMatch.p1.isWinner = false;
-                    if (nextMatch.p2) nextMatch.p2.isWinner = false;
-                    clearFutureRounds(newBracket, nextRoundIndex, nextMatchIndex);
-                }
-
-                newBracket[nextRoundIndex][nextMatchIndex] = nextMatch;
-            }
-
-            setBracket(newBracket);
-            calculateScore(newBracket);
-        };
-
-        const clearFutureRounds = (bracketState, rIndex, mIndex) => {
-            // Recursively clear path forward
-            const nextR = rIndex + 1;
-            if (nextR >= bracketState.length) return;
-
-            const nextM = Math.floor(mIndex / 2);
-            const nextMatch = { ...bracketState[nextR][nextM] };
-
-            // Determine which slot is being invalidated
-            const isP1 = mIndex % 2 === 0;
-
-            // If we are clearing, we are removing the player that came from (rIndex, mIndex)
-            // Actually, in handleSelection we are REPLACING, not removing. 
-            // So we only need to clear if the actual *winner* of the target match changes.
-            // The simple logic above (reset winner and isWinner flags) is enough for immediate next round.
-            // If the user replaces Player A with Player B in R2, then R3's slot for that winner needs to be updated or cleared.
-
-            // Let's do a Deep Clear for correctness:
-            // If we change the input to R(N), then the Winner of R(N) is invalid.
-            // Which means the input to R(N+1) is invalid (null).
-
-            if (isP1) nextMatch.p1 = null;
-            else nextMatch.p2 = null;
-
-            nextMatch.winner = null;
-            bracketState[nextR][nextM] = nextMatch;
-
-            // Recurse
-            clearFutureRounds(bracketState, nextR, nextM);
-        }
-
-        const calculateScore = (currentBracket) => {
-            // "Each match has a value of 1 point"
-            // 1 point per WINNER selected.
-            let total = 0;
-            currentBracket.forEach(round => {
-                round.forEach(match => {
-                    if (match.winner) total += 1;
-                });
+            // Custom Setup State
+            const [showCustomSetup, setShowCustomSetup] = useState(false);
+            const [pendingCustomData, setPendingCustomData] = useState(null);
+            const [customConfig, setCustomConfig] = useState({
+                title: "Custom Bracket",
+                subtitle: "User Uploaded",
+                type: 'elimination',
+                logoText: "YOUR",
+                logoSub: "BRACKET"
             });
-            setScore(total);
-        };
 
-        // --- Random Pick Logic ---
-        const handleRandomPick = () => {
-            // Ranking Mode: Shuffle
-            if (headerInfo.type === 'ranking') {
-                const shuffled = [...bracket];
-                for (let i = shuffled.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-                }
-                setBracket(shuffled);
-                return;
+            // Derived Data
+            const activeData = useMemo(() => {
+                if (selectedTournament === 'custom' && customMatches) return customMatches;
+                return TOURNAMENTS[selectedTournament] || [];
+            }, [selectedTournament, customMatches]);
+
+            const headerInfo = HEADER_DATA[selectedTournament] || HEADER_DATA.wimbledon;
+
+            // Helper: Create Empty Round
+            function createEmptyRound(count, roundNum) {
+                return Array(count).fill(null).map((_, i) => ({
+                    id: `r${roundNum}-${i + 1}`,
+                    p1: null,
+                    p2: null,
+                    winner: null
+                }));
             }
 
-            const newBracket = JSON.parse(JSON.stringify(bracket));
-            const totalRounds = newBracket.length;
+            // Effect: Initialize Bracket / List
+            useEffect(() => {
+                if (!activeData || activeData.length === 0) return;
 
-            // Iterate through available rounds
-            for (let r = 0; r < totalRounds; r++) {
-                const round = newBracket[r];
-                round.forEach((match, mIndex) => {
-                    if (match.p1 && match.p2) {
-                        const isP1 = Math.random() < 0.5;
-                        const winner = isP1 ? match.p1 : match.p2;
+                if (headerInfo.type === 'ranking') {
+                    setBracket(JSON.parse(JSON.stringify(activeData)));
+                    setScore(0);
+                    return;
+                }
 
-                        match.winner = winner.name;
-                        match.p1.isWinner = false;
-                        match.p2.isWinner = false;
+                const matchCount = activeData.length;
+                const totalRounds = Math.ceil(Math.log2(matchCount * 2));
+                const rounds = [];
 
-                        if (isP1) match.p1.isWinner = true;
-                        else match.p2.isWinner = true;
+                // Round 1
+                const r1 = activeData.map((m, i) => ({
+                    id: `r1-${i}`,
+                    p1: { name: m.p1, isWinner: false },
+                    p2: { name: m.p2, isWinner: false },
+                    winner: null,
+                    originalMatchId: m.match_id
+                }));
+                rounds.push(r1);
 
-                        const nextR = r + 1;
-                        if (nextR < totalRounds) {
-                            const nextM = Math.floor(mIndex / 2);
-                            const isNextP1Slot = mIndex % 2 === 0;
-                            const nextMatch = newBracket[nextR][nextM];
+                // Subsequent Rounds
+                let currentCount = matchCount;
+                for (let r = 2; r <= totalRounds; r++) {
+                    currentCount = currentCount / 2;
+                    rounds.push(createEmptyRound(currentCount, r));
+                }
 
-                            const advancedPlayer = { name: winner.name, isWinner: false, fromMatchId: match.id };
+                setBracket(rounds);
+                setScore(0);
+                setActiveTab(0);
+            }, [activeData, headerInfo]); // Added headerInfo dep for safety
 
-                            if (isNextP1Slot) nextMatch.p1 = advancedPlayer;
-                            else nextMatch.p2 = advancedPlayer;
+            // Updated File Upload Handler
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
 
-                            nextMatch.winner = null;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const text = evt.target.result;
+                    const lines = text.split('\n');
+                    const parsed = [];
+                    let detectedType = 'elimination'; // Default
+
+                    const startIndex = lines[0].toLowerCase().includes('player') || lines[0].toLowerCase().includes('team') ? 1 : 0;
+                    let columnCount = 0;
+
+                    for (let i = startIndex; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+
+                        const cols = line.split(',');
+                        if (columnCount === 0) columnCount = cols.length;
+
+                        if (cols.length >= 3) {
+                            parsed.push({
+                                match_id: cols[0].trim(),
+                                p1: cols[1].trim(),
+                                p2: cols[2].trim()
+                            });
+                        } else if (cols.length === 2) {
+                            parsed.push({
+                                id: cols[0].trim(),
+                                name: cols[1].trim(),
+                                team: "User Upload", // Generic team name
+                                rank: cols[0].trim()
+                            });
                         }
                     }
-                });
+
+                    if (columnCount < 3) {
+                        detectedType = 'ranking';
+                    }
+
+                    if (parsed.length > 0) {
+                        setPendingCustomData(parsed);
+                        setCustomConfig(prev => ({ ...prev, type: detectedType, title: file.name.replace('.csv', '') }));
+                        setShowCustomSetup(true);
+                        // Reset file input so same file can be selected again if cancelled
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                    } else {
+                        alert("Could not parse CSV. Ensure format: MatchID, Player1, Player2 (for bracket) OR Rank, Name (for list)");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const confirmCustomSetup = () => {
+                if (!pendingCustomData) return;
+
+                // Update global HEADER_DATA.custom reference carefully
+                HEADER_DATA.custom.title = customConfig.title;
+                HEADER_DATA.custom.subtitle = customConfig.subtitle;
+                HEADER_DATA.custom.type = customConfig.type;
+                HEADER_DATA.custom.logoText = customConfig.logoText;
+                HEADER_DATA.custom.logoSub = customConfig.logoSub;
+
+                setCustomMatches(pendingCustomData);
+
+                // Save to LocalStorage including CONFIG
+                localStorage.setItem('savedCustomBracket', JSON.stringify(pendingCustomData));
+                localStorage.setItem('savedCustomConfig', JSON.stringify(customConfig));
+
+                setSelectedTournament('custom');
+                setShowCustomSetup(false);
+            };
+
+            // Load Saved Config on Mount
+            useEffect(() => {
+                const savedBracket = localStorage.getItem('savedCustomBracket');
+                const savedConfig = localStorage.getItem('savedCustomConfig');
+
+                if (savedBracket) {
+                    try {
+                        const parsed = JSON.parse(savedBracket);
+                        setCustomMatches(parsed);
+
+                        if (savedConfig) {
+                            const config = JSON.parse(savedConfig);
+                            HEADER_DATA.custom.title = config.title;
+                            HEADER_DATA.custom.subtitle = config.subtitle;
+                            HEADER_DATA.custom.type = config.type;
+                            HEADER_DATA.custom.logoText = config.logoText;
+                            HEADER_DATA.custom.logoSub = config.logoSub;
+                        }
+
+                        // Only select custom if explicitly requested or let user choose? 
+                        // For now, load it into state but let user select from dropdown manually 
+                        // unless we want auto-load. Auto-load might be confusing if they refresh.
+                        // Let's stick to "it's available in dropdown".
+                        // Wait, previous logic auto-selected it. Let's keep that but careful.
+                        // Actually, let's NOT auto-select on refresh, just make it available.
+                        // But user expects persistence. So let's auto-select 'custom' if it was last selected?
+                        // Too complex for now. Just populate data so "Custom Bracket" option works.
+                        if (localStorage.getItem('lastSelectedTournament') === 'custom') {
+                            setSelectedTournament('custom');
+                        }
+
+                    } catch (e) {
+                        console.error("Failed to load saved bracket", e);
+                    }
+                }
+            }, []);
+
+            // Save last selected tournament
+            useEffect(() => {
+                localStorage.setItem('lastSelectedTournament', selectedTournament);
+            }, [selectedTournament]);
+
+            const handleSelection = (roundIndex, matchIndex, playerKey) => {
+                // Determine max rounds dynamically
+                const maxRounds = bracket.length;
+                if (roundIndex >= maxRounds) return;
+
+                const newBracket = [...bracket];
+                const currentMatch = { ...newBracket[roundIndex][matchIndex] };
+
+                if (!currentMatch.p1 || !currentMatch.p2) return;
+
+                const selectedPlayer = currentMatch[playerKey];
+
+                currentMatch.p1 = { ...currentMatch.p1, isWinner: playerKey === 'p1' };
+                currentMatch.p2 = { ...currentMatch.p2, isWinner: playerKey === 'p2' };
+                currentMatch.winner = selectedPlayer.name;
+
+                newBracket[roundIndex][matchIndex] = currentMatch;
+
+                // Advance
+                const nextRoundIndex = roundIndex + 1;
+                if (nextRoundIndex < newBracket.length) {
+                    const nextMatchIndex = Math.floor(matchIndex / 2);
+                    const isNextP1 = matchIndex % 2 === 0;
+
+                    const nextMatch = { ...newBracket[nextRoundIndex][nextMatchIndex] };
+                    const advancedPlayer = { name: selectedPlayer.name, isWinner: false, fromMatchId: currentMatch.id };
+
+                    if (isNextP1) nextMatch.p1 = advancedPlayer;
+                    else nextMatch.p2 = advancedPlayer;
+
+                    if (nextMatch.winner) {
+                        nextMatch.winner = null;
+                        if (nextMatch.p1) nextMatch.p1.isWinner = false;
+                        if (nextMatch.p2) nextMatch.p2.isWinner = false;
+                        clearFutureRounds(newBracket, nextRoundIndex, nextMatchIndex);
+                    }
+
+                    newBracket[nextRoundIndex][nextMatchIndex] = nextMatch;
+                }
+
+                setBracket(newBracket);
+                calculateScore(newBracket);
+            };
+
+            const clearFutureRounds = (bracketState, rIndex, mIndex) => {
+                // Recursively clear path forward
+                const nextR = rIndex + 1;
+                if (nextR >= bracketState.length) return;
+
+                const nextM = Math.floor(mIndex / 2);
+                const nextMatch = { ...bracketState[nextR][nextM] };
+
+                // Determine which slot is being invalidated
+                const isP1 = mIndex % 2 === 0;
+
+                // If we are clearing, we are removing the player that came from (rIndex, mIndex)
+                // Actually, in handleSelection we are REPLACING, not removing. 
+                // So we only need to clear if the actual *winner* of the target match changes.
+                // The simple logic above (reset winner and isWinner flags) is enough for immediate next round.
+                // If the user replaces Player A with Player B in R2, then R3's slot for that winner needs to be updated or cleared.
+
+                // Let's do a Deep Clear for correctness:
+                // If we change the input to R(N), then the Winner of R(N) is invalid.
+                // Which means the input to R(N+1) is invalid (null).
+
+                if (isP1) nextMatch.p1 = null;
+                else nextMatch.p2 = null;
+
+                nextMatch.winner = null;
+                bracketState[nextR][nextM] = nextMatch;
+
+                // Recurse
+                clearFutureRounds(bracketState, nextR, nextM);
             }
 
-            setBracket(newBracket);
-            calculateScore(newBracket);
-        };
-
-        // --- Canvas / Interaction Logic ---
-        const handleWheel = (e) => {
-            if (e.ctrlKey || e.metaKey) { // Zoom
-                e.preventDefault();
-                const delta = -e.deltaY * 0.001;
-                const newScale = Math.min(Math.max(0.5, scale + delta), 2);
-                setScale(newScale);
-            }
-            // Removed Pan logic to allow native scrolling
-        };
-
-        // --- Icons ---
-        const TrophyIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                <path d="M4 22h16" />
-                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-            </svg>
-        );
-
-        const CrownIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 opacity-50 mx-auto mb-2" style={{ color: headerInfo.colors.accent }}>
-                <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
-            </svg>
-        );
-
-        if (bracket.length === 0) return <div className="flex h-screen items-center justify-center font-bold" style={{ color: headerInfo.colors.main }}>Loading Bracket...</div>;
-
-        // --- PDF Export Logic ---
-        const handleDownloadPDF = async () => {
-            const element = document.querySelector('main'); // Capture main content
-            if (!element) return;
-
-            // Loading State (optional, but good UX)
-            const btn = document.getElementById('export-btn');
-            const originalText = btn ? btn.innerText : 'Export';
-            if (btn) btn.innerText = 'Generating...';
-
-            try {
-                const canvas = await html2canvas(element, {
-                    scale: 2, // Improve resolution
-                    useCORS: true,
-                    logging: false,
-                    scrollY: -window.scrollY
+            const calculateScore = (currentBracket) => {
+                // "Each match has a value of 1 point"
+                // 1 point per WINNER selected.
+                let total = 0;
+                currentBracket.forEach(round => {
+                    round.forEach(match => {
+                        if (match.winner) total += 1;
+                    });
                 });
+                setScore(total);
+            };
 
-                const imgData = canvas.toDataURL('image/png');
-                // Calculate PDF size based on canvas aspect ratio
-                const imgWidth = canvas.width;
-                const imgHeight = canvas.height;
+            // --- Random Pick Logic ---
+            const handleRandomPick = () => {
+                // Ranking Mode: Shuffle
+                if (headerInfo.type === 'ranking') {
+                    const shuffled = [...bracket];
+                    for (let i = shuffled.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                    }
+                    setBracket(shuffled);
+                    return;
+                }
 
-                const pdf = new jspdf.jsPDF({
-                    orientation: imgWidth > imgHeight ? 'landscape' : 'portrait',
-                    unit: 'px',
-                    format: [imgWidth, imgHeight]
-                });
+                const newBracket = JSON.parse(JSON.stringify(bracket));
+                const totalRounds = newBracket.length;
 
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-                pdf.save(`${headerInfo.title.replace(/\s+/g, '_')}_prediction.pdf`);
-            } catch (err) {
-                console.error("PDF generation failed", err);
-                alert("Failed to generate PDF. Please try using the browser's Print feature.");
-            } finally {
-                if (btn) btn.innerText = originalText;
-            }
-        };
+                // Iterate through available rounds
+                for (let r = 0; r < totalRounds; r++) {
+                    const round = newBracket[r];
+                    round.forEach((match, mIndex) => {
+                        if (match.p1 && match.p2) {
+                            const isP1 = Math.random() < 0.5;
+                            const winner = isP1 ? match.p1 : match.p2;
 
-        // --- Generate Preset Code ---
-        const generatePresetCode = () => {
-            const identifier = customConfig.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            const code = `
+                            match.winner = winner.name;
+                            match.p1.isWinner = false;
+                            match.p2.isWinner = false;
+
+                            if (isP1) match.p1.isWinner = true;
+                            else match.p2.isWinner = true;
+
+                            const nextR = r + 1;
+                            if (nextR < totalRounds) {
+                                const nextM = Math.floor(mIndex / 2);
+                                const isNextP1Slot = mIndex % 2 === 0;
+                                const nextMatch = newBracket[nextR][nextM];
+
+                                const advancedPlayer = { name: winner.name, isWinner: false, fromMatchId: match.id };
+
+                                if (isNextP1Slot) nextMatch.p1 = advancedPlayer;
+                                else nextMatch.p2 = advancedPlayer;
+
+                                nextMatch.winner = null;
+                            }
+                        }
+                    });
+                }
+
+                setBracket(newBracket);
+                calculateScore(newBracket);
+            };
+
+            // --- Canvas / Interaction Logic ---
+            const handleWheel = (e) => {
+                if (e.ctrlKey || e.metaKey) { // Zoom
+                    e.preventDefault();
+                    const delta = -e.deltaY * 0.001;
+                    const newScale = Math.min(Math.max(0.5, scale + delta), 2);
+                    setScale(newScale);
+                }
+                // Removed Pan logic to allow native scrolling
+            };
+
+            // --- Icons ---
+            const TrophyIcon = () => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                    <path d="M4 22h16" />
+                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                </svg>
+            );
+
+            const CrownIcon = () => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 opacity-50 mx-auto mb-2" style={{ color: headerInfo.colors.accent }}>
+                    <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+                </svg>
+            );
+
+            if (bracket.length === 0) return <div className="flex h-screen items-center justify-center font-bold" style={{ color: headerInfo.colors.main }}>Loading Bracket...</div>;
+
+            // --- PDF Export Logic ---
+            const handleDownloadPDF = async () => {
+                const element = document.querySelector('main'); // Capture main content
+                if (!element) return;
+
+                // Loading State (optional, but good UX)
+                const btn = document.getElementById('export-btn');
+                const originalText = btn ? btn.innerText : 'Export';
+                if (btn) btn.innerText = 'Generating...';
+
+                try {
+                    const canvas = await html2canvas(element, {
+                        scale: 2, // Improve resolution
+                        useCORS: true,
+                        logging: false,
+                        scrollY: -window.scrollY
+                    });
+
+                    const imgData = canvas.toDataURL('image/png');
+                    // Calculate PDF size based on canvas aspect ratio
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+
+                    const pdf = new jspdf.jsPDF({
+                        orientation: imgWidth > imgHeight ? 'landscape' : 'portrait',
+                        unit: 'px',
+                        format: [imgWidth, imgHeight]
+                    });
+
+                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    pdf.save(`${headerInfo.title.replace(/\s+/g, '_')}_prediction.pdf`);
+                } catch (err) {
+                    console.error("PDF generation failed", err);
+                    alert("Failed to generate PDF. Please try using the browser's Print feature.");
+                } finally {
+                    if (btn) btn.innerText = originalText;
+                }
+            };
+
+            // --- Generate Preset Code ---
+            const generatePresetCode = () => {
+                const identifier = customConfig.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const code = `
 // 1. Add this DATA ARRAY
 const ${identifier.toUpperCase()}_DATA = ${JSON.stringify(pendingCustomData, null, 4)};
 
@@ -742,339 +807,339 @@ ${identifier}: {
 // 3. Add to TOURNAMENTS
 ${identifier}: ${identifier.toUpperCase()}_DATA
 `;
-            navigator.clipboard.writeText(code);
-            alert("Code copied! Send this to the developer to make it permanent.");
-        };
+                navigator.clipboard.writeText(code);
+                alert("Code copied! Send this to the developer to make it permanent.");
+            };
 
-        return (
-            <div className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900">
-                {/* Custom Setup Modal */}
-                {showCustomSetup && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-                            <div className="bg-blue-600 px-6 py-4 flex justify-between items-center">
-                                <h3 className="text-white font-bold text-lg">Custom Bracket Setup</h3>
-                                <button onClick={() => setShowCustomSetup(false)} className="text-white/70 hover:text-white">✕</button>
-                            </div>
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Tournament Name</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={customConfig.title}
-                                        onChange={e => setCustomConfig({ ...customConfig, title: e.target.value })}
-                                    />
+            return (
+                <div className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900">
+                    {/* Custom Setup Modal */}
+                    {showCustomSetup && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+                                <div className="bg-blue-600 px-6 py-4 flex justify-between items-center">
+                                    <h3 className="text-white font-bold text-lg">Custom Bracket Setup</h3>
+                                    <button onClick={() => setShowCustomSetup(false)} className="text-white/70 hover:text-white">✕</button>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle / Description</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={customConfig.subtitle}
-                                        onChange={e => setCustomConfig({ ...customConfig, subtitle: e.target.value })}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="p-6 space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Logo Text (Top)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Tournament Name</label>
                                         <input
                                             type="text"
-                                            className="w-full px-3 py-2 border rounded-md uppercase"
-                                            value={customConfig.logoText}
-                                            onChange={e => setCustomConfig({ ...customConfig, logoText: e.target.value })}
+                                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={customConfig.title}
+                                            onChange={e => setCustomConfig({ ...customConfig, title: e.target.value })}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Logo Text (Bottom)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle / Description</label>
                                         <input
                                             type="text"
-                                            className="w-full px-3 py-2 border rounded-md uppercase"
-                                            value={customConfig.logoSub}
-                                            onChange={e => setCustomConfig({ ...customConfig, logoSub: e.target.value })}
+                                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={customConfig.subtitle}
+                                            onChange={e => setCustomConfig({ ...customConfig, subtitle: e.target.value })}
                                         />
                                     </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Logo Text (Top)</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border rounded-md uppercase"
+                                                value={customConfig.logoText}
+                                                onChange={e => setCustomConfig({ ...customConfig, logoText: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Logo Text (Bottom)</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border rounded-md uppercase"
+                                                value={customConfig.logoSub}
+                                                onChange={e => setCustomConfig({ ...customConfig, logoSub: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
+                                        <select
+                                            className="w-full px-3 py-2 border rounded-md bg-gray-50"
+                                            value={customConfig.type}
+                                            onChange={e => setCustomConfig({ ...customConfig, type: e.target.value })}
+                                        >
+                                            <option value="elimination">Bracket (Elimination)</option>
+                                            <option value="ranking">Ranking List (Table)</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                                    <select
-                                        className="w-full px-3 py-2 border rounded-md bg-gray-50"
-                                        value={customConfig.type}
-                                        onChange={e => setCustomConfig({ ...customConfig, type: e.target.value })}
+                                <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t">
+                                    <button
+                                        onClick={generatePresetCode}
+                                        className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
                                     >
-                                        <option value="elimination">Bracket (Elimination)</option>
-                                        <option value="ranking">Ranking List (Table)</option>
-                                    </select>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                                        Get Code for Dev
+                                    </button>
+                                    <button
+                                        onClick={confirmCustomSetup}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-all transform hover:scale-105"
+                                    >
+                                        Play Now
+                                    </button>
                                 </div>
                             </div>
-                            <div className="bg-gray-50 px-6 py-4 flex justify-between items-center border-t">
+                        </div>
+                    )}
+
+                    {/* Header */}
+                    <header className="text-white shadow-lg z-20 flex-shrink-0 border-b border-gray-800 transition-colors duration-500" style={{ backgroundColor: headerInfo.colors.main }}>
+                        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                            <div className="flex items-center space-x-3">
+                                {/* Splash Tech Logo */}
+                                <div className="flex flex-col items-center select-none cursor-pointer" onClick={() => window.location.reload()}>
+                                    <h1 className="text-2xl font-black text-white tracking-wide leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>{headerInfo.logoText}</h1>
+                                    <div className="flex justify-between w-full mt-1">
+                                        <span className="text-[10px] font-bold tracking-widest leading-none w-full text-center" style={{ letterSpacing: '0.4em', marginRight: '-0.4em', color: headerInfo.colors.accent }}>{headerInfo.logoSub}</span>
+                                    </div>
+                                </div>
+                                <div className="h-8 w-px bg-gray-700 mx-4 hidden md:block"></div>
+                                <div className="flex flex-col justify-center hidden md:flex">
+                                    <h2 className="font-semibold text-sm leading-tight text-gray-200">{headerInfo.title}</h2>
+                                    <p className="text-[10px] text-gray-400">{headerInfo.subtitle}</p>
+                                </div>
+
+                                {/* Tournament Switcher */}
+                                <div className="ml-8 hidden md:block">
+                                    <select
+                                        className="bg-black/30 text-white text-xs rounded px-2 py-1 border border-white/20 outline-none hover:bg-black/50 transition-colors"
+                                        value={selectedTournament}
+                                        onChange={(e) => {
+                                            if (e.target.value === 'upload') {
+                                                fileInputRef.current.click();
+                                            } else {
+                                                setSelectedTournament(e.target.value);
+                                            }
+                                        }}
+                                    >
+                                        <option value="wimbledon">Wimbledon '26</option>
+                                        <option value="darts">World Darts</option>
+                                        <option value="f1">Formula 1 '26</option>
+                                        <option value="pl">Premier League 25/26</option>
+                                        <option value="upload">📂 Upload CSV...</option>
+                                        {selectedTournament === 'custom' && <option value="custom">Custom Bracket</option>}
+                                    </select>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        accept=".csv"
+                                        onChange={handleFileUpload}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-center space-x-6">
+                                {headerInfo.type === 'elimination' && (
+                                    <div className="text-center">
+                                        <span className="block text-[10px] uppercase tracking-wider opacity-70">Score</span>
+                                        <span className="text-xl font-bold" style={{ color: headerInfo.colors.accent }}>{score} <span className="text-xs text-gray-500">/ {activeData.length * 2 - 1}</span></span>
+                                    </div>
+                                )}
                                 <button
-                                    onClick={generatePresetCode}
-                                    className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                                    className="text-white/70 hover:text-white px-2 transition-colors"
+                                    onClick={() => setShowInfo(true)}
+                                    title="Instructions & Info"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                                    Get Code for Dev
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                                 </button>
                                 <button
-                                    onClick={confirmCustomSetup}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-all transform hover:scale-105"
+                                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center space-x-2 border border-white/10"
+                                    onClick={handleRandomPick}
                                 >
-                                    Play Now
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                    <span>Quick Pick</span>
+                                </button>
+                                <button
+                                    id="export-btn"
+                                    className="hidden md:block bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-600 shadow-sm"
+                                    onClick={handleDownloadPDF}
+                                >
+                                    Export PDF
                                 </button>
                             </div>
                         </div>
-                    </div>
-                )}
+                    </header>
 
-                {/* Header */}
-                <header className="text-white shadow-lg z-20 flex-shrink-0 border-b border-gray-800 transition-colors duration-500" style={{ backgroundColor: headerInfo.colors.main }}>
-                    <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-                        <div className="flex items-center space-x-3">
-                            {/* Splash Tech Logo */}
-                            <div className="flex flex-col items-center select-none cursor-pointer" onClick={() => window.location.reload()}>
-                                <h1 className="text-2xl font-black text-white tracking-wide leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>{headerInfo.logoText}</h1>
-                                <div className="flex justify-between w-full mt-1">
-                                    <span className="text-[10px] font-bold tracking-widest leading-none w-full text-center" style={{ letterSpacing: '0.4em', marginRight: '-0.4em', color: headerInfo.colors.accent }}>{headerInfo.logoSub}</span>
+                    {/* Content Area */}
+                    <main
+                        className="flex-1 relative overflow-auto bg-[#F3F4F6] cursor-default"
+                        onWheel={headerInfo.type === 'elimination' ? handleWheel : undefined}
+                    >
+                        {headerInfo.type === 'ranking' ? (
+                            <RankingView
+                                items={bracket}
+                                setItems={setBracket}
+                                accentColor={headerInfo.colors.main}
+                                showRankBadge={selectedTournament !== 'pl'}
+                            />
+                        ) : (
+                            <>
+                                {/* Mobile Tabs */}
+                                <div className="md:hidden absolute top-0 left-0 right-0 z-10 bg-white shadow-sm border-b overflow-x-auto hide-scrollbar">
+                                    <div className="flex px-2 space-x-1 py-2 min-w-max">
+                                        {bracket.map((_, idx) => {
+                                            let label = `R${idx + 1}`;
+                                            if (idx === bracket.length - 1) label = "Final";
+                                            else if (idx === bracket.length - 2) label = "SF";
+                                            else if (idx === bracket.length - 3) label = "QF";
+
+                                            return (
+                                                <button
+                                                    key={idx}
+                                                    onClick={(e) => { e.stopPropagation(); setActiveTab(idx); }}
+                                                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${activeTab === idx
+                                                        ? 'bg-wimbledon-purple text-white shadow-md'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
+                                                    style={activeTab === idx ? { backgroundColor: headerInfo.colors.main } : {}}
+                                                >
+                                                    {label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="h-8 w-px bg-gray-700 mx-4 hidden md:block"></div>
-                            <div className="flex flex-col justify-center hidden md:flex">
-                                <h2 className="font-semibold text-sm leading-tight text-gray-200">{headerInfo.title}</h2>
-                                <p className="text-[10px] text-gray-400">{headerInfo.subtitle}</p>
-                            </div>
 
-                            {/* Tournament Switcher */}
-                            <div className="ml-8 hidden md:block">
-                                <select
-                                    className="bg-black/30 text-white text-xs rounded px-2 py-1 border border-white/20 outline-none hover:bg-black/50 transition-colors"
-                                    value={selectedTournament}
-                                    onChange={(e) => {
-                                        if (e.target.value === 'upload') {
-                                            fileInputRef.current.click();
-                                        } else {
-                                            setSelectedTournament(e.target.value);
-                                        }
+                                {/* Bracket Container */}
+                                <div
+                                    ref={containerRef}
+                                    className={`transform origin-top-left transition-transform duration-75 ease-out p-8 ${window.innerWidth < 768 ? 'block' : 'flex'}`}
+                                    style={{
+                                        transform: window.innerWidth >= 768
+                                            ? `scale(${scale})`
+                                            : 'none',
+                                        width: window.innerWidth >= 768 ? 'max-content' : '100%',
+                                        padding: window.innerWidth < 768 ? '4rem 1rem 8rem 1rem' : undefined
                                     }}
                                 >
-                                    <option value="wimbledon">Wimbledon '26</option>
-                                    <option value="darts">World Darts</option>
-                                    <option value="f1">Formula 1 '26</option>
-                                    <option value="pl">Premier League 25/26</option>
-                                    <option value="upload">📂 Upload CSV...</option>
-                                    {selectedTournament === 'custom' && <option value="custom">Custom Bracket</option>}
-                                </select>
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                    accept=".csv"
-                                    onChange={handleFileUpload}
-                                />
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-6">
-                            {headerInfo.type === 'elimination' && (
-                                <div className="text-center">
-                                    <span className="block text-[10px] uppercase tracking-wider opacity-70">Score</span>
-                                    <span className="text-xl font-bold" style={{ color: headerInfo.colors.accent }}>{score} <span className="text-xs text-gray-500">/ {activeData.length * 2 - 1}</span></span>
-                                </div>
-                            )}
-                            <button
-                                className="text-white/70 hover:text-white px-2 transition-colors"
-                                onClick={() => setShowInfo(true)}
-                                title="Instructions & Info"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                            </button>
-                            <button
-                                className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm flex items-center space-x-2 border border-white/10"
-                                onClick={handleRandomPick}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                                <span>Quick Pick</span>
-                            </button>
-                            <button
-                                id="export-btn"
-                                className="hidden md:block bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-600 shadow-sm"
-                                onClick={handleDownloadPDF}
-                            >
-                                Export PDF
-                            </button>
-                        </div>
-                    </div>
-                </header>
+                                    {bracket.map((round, rIndex) => {
+                                        if (window.innerWidth < 768 && activeTab !== rIndex) return null;
 
-                {/* Content Area */}
-                <main
-                    className="flex-1 relative overflow-auto bg-[#F3F4F6] cursor-default"
-                    onWheel={headerInfo.type === 'elimination' ? handleWheel : undefined}
-                >
-                    {headerInfo.type === 'ranking' ? (
-                        <RankingView
-                            items={bracket}
-                            setItems={setBracket}
-                            accentColor={headerInfo.colors.main}
-                            showRankBadge={selectedTournament !== 'pl'}
-                        />
-                    ) : (
-                        <>
-                            {/* Mobile Tabs */}
-                            <div className="md:hidden absolute top-0 left-0 right-0 z-10 bg-white shadow-sm border-b overflow-x-auto hide-scrollbar">
-                                <div className="flex px-2 space-x-1 py-2 min-w-max">
-                                    {bracket.map((_, idx) => {
-                                        let label = `R${idx + 1}`;
-                                        if (idx === bracket.length - 1) label = "Final";
-                                        else if (idx === bracket.length - 2) label = "SF";
-                                        else if (idx === bracket.length - 3) label = "QF";
+                                        let roundLabel = `Round ${rIndex + 1}`;
+                                        const isFinal = rIndex === bracket.length - 1;
+                                        const isSemi = rIndex === bracket.length - 2;
+                                        const isQuarter = rIndex === bracket.length - 3;
+
+                                        if (isFinal) roundLabel = "Final";
+                                        else if (isSemi) roundLabel = "Semi-finals";
+                                        else if (isQuarter) roundLabel = "Quarter-finals";
 
                                         return (
-                                            <button
-                                                key={idx}
-                                                onClick={(e) => { e.stopPropagation(); setActiveTab(idx); }}
-                                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${activeTab === idx
-                                                    ? 'bg-wimbledon-purple text-white shadow-md'
-                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                    }`}
-                                                style={activeTab === idx ? { backgroundColor: headerInfo.colors.main } : {}}
-                                            >
-                                                {label}
-                                            </button>
+                                            <div key={rIndex} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
+                                                <h3 className="hidden md:block text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 sticky top-0 bg-[#F3F4F6] pb-2 text-center">
+                                                    {roundLabel}
+                                                </h3>
+
+                                                <div
+                                                    className="flex flex-col justify-around h-full"
+                                                    style={{
+                                                        gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem',
+                                                        paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0',
+                                                    }}
+                                                >
+                                                    {round.map((match, mIndex) => (
+                                                        <MatchCard
+                                                            key={match.id}
+                                                            match={match}
+                                                            roundIndex={rIndex}
+                                                            onSelect={(playerKey) => handleSelection(rIndex, mIndex, playerKey)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
                                         );
                                     })}
-                                </div>
-                            </div>
 
-                            {/* Bracket Container */}
-                            <div
-                                ref={containerRef}
-                                className={`transform origin-top-left transition-transform duration-75 ease-out p-8 ${window.innerWidth < 768 ? 'block' : 'flex'}`}
-                                style={{
-                                    transform: window.innerWidth >= 768
-                                        ? `scale(${scale})`
-                                        : 'none',
-                                    width: window.innerWidth >= 768 ? 'max-content' : '100%',
-                                    padding: window.innerWidth < 768 ? '4rem 1rem 8rem 1rem' : undefined
-                                }}
-                            >
-                                {bracket.map((round, rIndex) => {
-                                    if (window.innerWidth < 768 && activeTab !== rIndex) return null;
-
-                                    let roundLabel = `Round ${rIndex + 1}`;
-                                    const isFinal = rIndex === bracket.length - 1;
-                                    const isSemi = rIndex === bracket.length - 2;
-                                    const isQuarter = rIndex === bracket.length - 3;
-
-                                    if (isFinal) roundLabel = "Final";
-                                    else if (isSemi) roundLabel = "Semi-finals";
-                                    else if (isQuarter) roundLabel = "Quarter-finals";
-
-                                    return (
-                                        <div key={rIndex} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
-                                            <h3 className="hidden md:block text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 sticky top-0 bg-[#F3F4F6] pb-2 text-center">
-                                                {roundLabel}
-                                            </h3>
-
-                                            <div
-                                                className="flex flex-col justify-around h-full"
-                                                style={{
-                                                    gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem',
-                                                    paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0',
-                                                }}
-                                            >
-                                                {round.map((match, mIndex) => (
-                                                    <MatchCard
-                                                        key={match.id}
-                                                        match={match}
-                                                        roundIndex={rIndex}
-                                                        onSelect={(playerKey) => handleSelection(rIndex, mIndex, playerKey)}
-                                                    />
-                                                ))}
-                                            </div>
+                                    {/* Final Winner Display for Desktop */}
+                                    <div className="hidden md:flex flex-col justify-center ml-16 items-center">
+                                        <div className="w-48 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center" style={{ borderColor: headerInfo.colors.accent }}>
+                                            {bracket.length > 0 && bracket[bracket.length - 1][0].winner ? (
+                                                <div>
+                                                    <CrownIcon />
+                                                    <span className="font-bold text-lg" style={{ color: headerInfo.colors.main }}>{bracket[bracket.length - 1][0].winner}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-400 text-sm">Champion</span>
+                                            )}
                                         </div>
-                                    );
-                                })}
-
-                                {/* Final Winner Display for Desktop */}
-                                <div className="hidden md:flex flex-col justify-center ml-16 items-center">
-                                    <div className="w-48 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center" style={{ borderColor: headerInfo.colors.accent }}>
-                                        {bracket.length > 0 && bracket[bracket.length - 1][0].winner ? (
-                                            <div>
-                                                <CrownIcon />
-                                                <span className="font-bold text-lg" style={{ color: headerInfo.colors.main }}>{bracket[bracket.length - 1][0].winner}</span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-gray-400 text-sm">Champion</span>
-                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        </>
-                    )}
-                </main>
+                            </>
+                        )}
+                    </main>
 
-                {/* Mobile Controls Overlay */}
-                <div className="md:hidden fixed bottom-6 right-6 z-30">
-                    <div className="bg-wimbledon-purple text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold">
-                        Score: {score}
-                    </div>
-                </div>
-
-                {/* Info Modal */}
-                {showInfo && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
-                        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 relative" onClick={e => e.stopPropagation()}>
-                            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600" onClick={() => setShowInfo(false)}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
-
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Bracket Platform Info</h3>
-                            <p className="text-sm text-gray-500 mb-6">Version 2.1 • Powered by Splash Tech</p>
-
-                            <div className="space-y-6">
-                                <section>
-                                    <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">Supported Brackets</h4>
-                                    <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-                                        <li><strong>Standard Single Elimination</strong>: 4, 8, 16, 32, 64, or 128 players.</li>
-                                        <li><strong>Extended Format</strong>: 96 Players (e.g. World Darts) with 32 Seeds + 64 Qualifiers.</li>
-                                    </ul>
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">How to Upload Data</h4>
-                                    <p className="text-sm text-gray-700 mb-2">You can upload your own bracket using a <strong>.CSV</strong> file.</p>
-                                    <div className="bg-gray-100 p-3 rounded text-xs font-mono text-gray-600 mb-2 overflow-x-auto">
-                                        MatchID, Player1, Player2<br />
-                                        1, Novak Djokovic, Andy Murray<br />
-                                        2, Rafael Nadal, Roger Federer<br />
-                                        ...
-                                    </div>
-                                    <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
-                                        <li><strong>MatchID</strong>: Number matches explicitly (1, 2, 3...)</li>
-                                        <li><strong>Order</strong>: Match 1 winner plays Match 2 winner in next round.</li>
-                                        <li>To add a <strong>BYE</strong> (auto-advance), set Player2 to "BYE".</li>
-                                    </ul>
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">Controls</h4>
-                                    <ul className="text-sm text-gray-700 space-y-1">
-                                        <li><strong>Click Payer</strong>: Advances them to next round.</li>
-                                        <li><strong>Quick Pick</strong>: Randomly simulates the rest of the bracket. Click again to Redraw.</li>
-                                        <li><strong>Scroll/Zoom</strong>: Use mouse wheel (hold Ctrl to Zoom).</li>
-                                    </ul>
-                                </section>
-                            </div>
-
-                            <div className="mt-8 pt-4 border-t text-center">
-                                <button className="bg-gray-900 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-800 transition" onClick={() => setShowInfo(false)}>
-                                    Got it
-                                </button>
-                            </div>
+                    {/* Mobile Controls Overlay */}
+                    <div className="md:hidden fixed bottom-6 right-6 z-30">
+                        <div className="bg-wimbledon-purple text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold">
+                            Score: {score}
                         </div>
                     </div>
-                )}
-            </div>
-        );
+
+                    {/* Info Modal */}
+                    {showInfo && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowInfo(false)}>
+                            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 relative" onClick={e => e.stopPropagation()}>
+                                <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600" onClick={() => setShowInfo(false)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Bracket Platform Info</h3>
+                                <p className="text-sm text-gray-500 mb-6">Version 2.1 • Powered by Splash Tech</p>
+
+                                <div className="space-y-6">
+                                    <section>
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">Supported Brackets</h4>
+                                        <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                                            <li><strong>Standard Single Elimination</strong>: 4, 8, 16, 32, 64, or 128 players.</li>
+                                            <li><strong>Extended Format</strong>: 96 Players (e.g. World Darts) with 32 Seeds + 64 Qualifiers.</li>
+                                        </ul>
+                                    </section>
+
+                                    <section>
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">How to Upload Data</h4>
+                                        <p className="text-sm text-gray-700 mb-2">You can upload your own bracket using a <strong>.CSV</strong> file.</p>
+                                        <div className="bg-gray-100 p-3 rounded text-xs font-mono text-gray-600 mb-2 overflow-x-auto">
+                                            MatchID, Player1, Player2<br />
+                                            1, Novak Djokovic, Andy Murray<br />
+                                            2, Rafael Nadal, Roger Federer<br />
+                                            ...
+                                        </div>
+                                        <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1">
+                                            <li><strong>MatchID</strong>: Number matches explicitly (1, 2, 3...)</li>
+                                            <li><strong>Order</strong>: Match 1 winner plays Match 2 winner in next round.</li>
+                                            <li>To add a <strong>BYE</strong> (auto-advance), set Player2 to "BYE".</li>
+                                        </ul>
+                                    </section>
+
+                                    <section>
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-wimbledon-purple mb-2 border-b pb-1">Controls</h4>
+                                        <ul className="text-sm text-gray-700 space-y-1">
+                                            <li><strong>Click Payer</strong>: Advances them to next round.</li>
+                                            <li><strong>Quick Pick</strong>: Randomly simulates the rest of the bracket. Click again to Redraw.</li>
+                                            <li><strong>Scroll/Zoom</strong>: Use mouse wheel (hold Ctrl to Zoom).</li>
+                                        </ul>
+                                    </section>
+                                </div>
+
+                                <div className="mt-8 pt-4 border-t text-center">
+                                    <button className="bg-gray-900 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-800 transition" onClick={() => setShowInfo(false)}>
+                                        Got it
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
         }
 
         function MatchCard({ match, roundIndex, onSelect }) {
