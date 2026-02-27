@@ -183,6 +183,14 @@
                 logoSub: "LEAGUE",
                 colors: { main: '#38003c', accent: '#00ff85' } // Iconic Purple/Green
             },
+            cl: {
+                type: 'elimination',
+                title: "Road to Budapest '26",
+                subtitle: "Champions League R16",
+                logoText: "CHAMPIONS",
+                logoSub: "LEAGUE",
+                colors: { main: '#0b0e29', accent: '#00d0ff' }
+            },
             splash1: {
                 type: 'elimination',
                 title: "SPLASH",
@@ -394,11 +402,23 @@
             { "match_id": "8", "p1": "Hugo", "p2": "Malynka" }
         ];
 
+        const CHAMPIONS_LEAGUE_DATA = [
+            { "match_id": "1", "p1": "Paris", "p2": "Chelsea" },
+            { "match_id": "2", "p1": "Galatasaray", "p2": "Liverpool" },
+            { "match_id": "3", "p1": "Real Madrid", "p2": "Man City" },
+            { "match_id": "4", "p1": "Atalanta", "p2": "Bayern München" },
+            { "match_id": "5", "p1": "Newcastle", "p2": "Barcelona" },
+            { "match_id": "6", "p1": "Atleti", "p2": "Tottenham" },
+            { "match_id": "7", "p1": "Bodø/Glimt", "p2": "Sporting CP" },
+            { "match_id": "8", "p1": "Leverkusen", "p2": "Arsenal" }
+        ];
+
         const TOURNAMENTS = {
             wimbledon: WIMBLEDON_MATCHES,
             darts: DARTS_MATCHES,
             f1: F1_DRIVERS,
             pl: PREMIER_LEAGUE_TEAMS,
+            cl: CHAMPIONS_LEAGUE_DATA,
             splash1: SPLASH1_DATA
         };
 
@@ -947,6 +967,7 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
                                         <option value="darts">World Darts</option>
                                         <option value="f1">Formula 1 '26</option>
                                         <option value="pl">Premier League 25/26</option>
+                                        <option value="cl">Champions League</option>
                                         <option value="splash1">SPLASH</option>
                                         <option value="upload">📂 Upload CSV...</option>
                                         {customMatches && <option value="custom">{HEADER_DATA.custom.title}</option>}
