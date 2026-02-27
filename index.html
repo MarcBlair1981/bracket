@@ -192,6 +192,15 @@
                 logoSub: "LEAGUE",
                 colors: { main: '#0b0e29', accent: '#00d0ff' }
             },
+            wc: {
+                type: 'elimination',
+                viewMode: 'two-sided',
+                title: "FIFA World Cup '26",
+                subtitle: "Knockout Sprint",
+                logoText: "WORLD",
+                logoSub: "CUP",
+                colors: { main: '#111827', accent: '#E11D48' } // Dark with USA/Mexico/Canada Red accent
+            },
             splash1: {
                 type: 'elimination',
                 title: "SPLASH",
@@ -414,12 +423,32 @@
             { "match_id": "8", "p1": "Leverkusen", "p2": "Arsenal" }
         ];
 
+        const WC2026_DATA = [
+            { "match_id": "1", "p1": "Argentina", "p2": "Canada" },
+            { "match_id": "2", "p1": "Senegal", "p2": "Japan" },
+            { "match_id": "3", "p1": "Spain", "p2": "Mexico" },
+            { "match_id": "4", "p1": "Italy", "p2": "Morocco" },
+            { "match_id": "5", "p1": "Brazil", "p2": "South Korea" },
+            { "match_id": "6", "p1": "Croatia", "p2": "Nigeria" },
+            { "match_id": "7", "p1": "England", "p2": "Australia" },
+            { "match_id": "8", "p1": "Colombia", "p2": "Ukraine" },
+            { "match_id": "9", "p1": "France", "p2": "USA" },
+            { "match_id": "10", "p1": "Uruguay", "p2": "Iran" },
+            { "match_id": "11", "p1": "Portugal", "p2": "Ecuador" },
+            { "match_id": "12", "p1": "Netherlands", "p2": "Ghana" },
+            { "match_id": "13", "p1": "Germany", "p2": "Chile" },
+            { "match_id": "14", "p1": "Switzerland", "p2": "Saudi Arabia" },
+            { "match_id": "15", "p1": "Belgium", "p2": "Ivory Coast" },
+            { "match_id": "16", "p1": "Denmark", "p2": "Peru" }
+        ];
+
         const TOURNAMENTS = {
             wimbledon: WIMBLEDON_MATCHES,
             darts: DARTS_MATCHES,
             f1: F1_DRIVERS,
             pl: PREMIER_LEAGUE_TEAMS,
             cl: CHAMPIONS_LEAGUE_DATA,
+            wc: WC2026_DATA,
             splash1: SPLASH1_DATA
         };
 
@@ -969,6 +998,7 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
                                         <option value="f1">Formula 1 '26</option>
                                         <option value="pl">Premier League 25/26</option>
                                         <option value="cl">Champions League</option>
+                                        <option value="wc">World Cup 2026</option>
                                         <option value="splash1">SPLASH</option>
                                         <option value="upload">📂 Upload CSV...</option>
                                         {customMatches && <option value="custom">{HEADER_DATA.custom.title}</option>}
