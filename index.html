@@ -185,6 +185,7 @@
             },
             cl: {
                 type: 'elimination',
+                viewMode: 'two-sided',
                 title: "Road to Budapest '26",
                 subtitle: "Champions League R16",
                 logoText: "CHAMPIONS",
@@ -1015,7 +1016,8 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
 
                     {/* Content Area */}
                     <main
-                        className="flex-1 relative overflow-auto bg-[#F3F4F6] cursor-default"
+                        className="flex-1 relative overflow-auto cursor-default transition-colors duration-500"
+                        style={{ backgroundColor: headerInfo.viewMode === 'two-sided' ? headerInfo.colors.main : '#F3F4F6' }}
                         onWheel={headerInfo.type === 'elimination' ? handleWheel : undefined}
                     >
                         {headerInfo.type === 'ranking' ? (
@@ -1056,7 +1058,7 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
                                 {/* Bracket Container */}
                                 <div
                                     ref={containerRef}
-                                    className={`transform origin-top-left transition-transform duration-75 ease-out p-8 ${window.innerWidth < 768 ? 'block' : 'flex'}`}
+                                    className={`transform origin-top-left transition-transform duration-75 ease-out p-8 ${window.innerWidth < 768 ? 'block' : 'flex'} ${headerInfo.viewMode === 'two-sided' ? 'justify-center items-center md:items-stretch min-w-max' : ''}`}
                                     style={{
                                         transform: window.innerWidth >= 768
                                             ? `scale(${scale})`
@@ -1065,57 +1067,130 @@ ${identifier}: ${identifier.toUpperCase()}_DATA
                                         padding: window.innerWidth < 768 ? '4rem 1rem 8rem 1rem' : undefined
                                     }}
                                 >
-                                    {bracket.map((round, rIndex) => {
-                                        if (window.innerWidth < 768 && activeTab !== rIndex) return null;
+                                    {headerInfo.viewMode === 'two-sided' ? (
+                                        <>
+                                            {/* LEFT SIDE */}
+                                            <div className="flex">
+                                                {bracket.slice(0, bracket.length - 1).map((round, rIndex) => {
+                                                    const matches = round.slice(0, round.length / 2);
+                                                    let roundLabel = `Round ${rIndex + 1}`;
+                                                    if (rIndex === bracket.length - 2) roundLabel = "Semi-finals";
+                                                    else if (rIndex === bracket.length - 3) roundLabel = "Quarter-finals";
+                                                    else if (rIndex === bracket.length - 4) roundLabel = "Round of 16";
 
-                                        let roundLabel = `Round ${rIndex + 1}`;
-                                        const isFinal = rIndex === bracket.length - 1;
-                                        const isSemi = rIndex === bracket.length - 2;
-                                        const isQuarter = rIndex === bracket.length - 3;
+                                                    return (
+                                                        <div key={`left-${rIndex}`} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
+                                                            <h3 className="hidden md:block text-xs font-bold uppercase tracking-widest mb-4 sticky top-0 pb-2 text-center" style={{ color: headerInfo.colors.accent }}>
+                                                                {roundLabel}
+                                                            </h3>
+                                                            <div className="flex flex-col justify-around h-full" style={{ gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem', paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0' }}>
+                                                                {matches.map((match, localIdx) => (
+                                                                    <MatchCard key={match.id} match={match} roundIndex={rIndex} onSelect={(playerKey) => handleSelection(rIndex, localIdx, playerKey)} />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
 
-                                        if (isFinal) roundLabel = "Final";
-                                        else if (isSemi) roundLabel = "Semi-finals";
-                                        else if (isQuarter) roundLabel = "Quarter-finals";
-
-                                        return (
-                                            <div key={rIndex} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
-                                                <h3 className="hidden md:block text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 sticky top-0 bg-[#F3F4F6] pb-2 text-center">
-                                                    {roundLabel}
+                                            {/* CENTER FINAL */}
+                                            <div className="flex flex-col justify-center mx-12">
+                                                <h3 className="hidden md:block text-xs font-bold uppercase tracking-widest mb-4 sticky top-0 pb-2 text-center" style={{ color: headerInfo.colors.accent }}>
+                                                    Final
                                                 </h3>
-
-                                                <div
-                                                    className="flex flex-col justify-around h-full"
-                                                    style={{
-                                                        gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem',
-                                                        paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0',
-                                                    }}
-                                                >
-                                                    {round.map((match, mIndex) => (
-                                                        <MatchCard
-                                                            key={match.id}
-                                                            match={match}
-                                                            roundIndex={rIndex}
-                                                            onSelect={(playerKey) => handleSelection(rIndex, mIndex, playerKey)}
-                                                        />
-                                                    ))}
+                                                <div className="mb-8">
+                                                    <MatchCard match={bracket[bracket.length - 1][0]} roundIndex={bracket.length - 1} onSelect={(playerKey) => handleSelection(bracket.length - 1, 0, playerKey)} />
+                                                </div>
+                                                <div className="w-full border border-gray-600 rounded-xl flex flex-col items-center justify-center bg-black/30 backdrop-blur-sm shadow-sm p-4 text-center" style={{ borderColor: headerInfo.colors.accent }}>
+                                                    <CrownIcon />
+                                                    {bracket[bracket.length - 1][0].winner ? (
+                                                        <span className="font-bold text-lg text-white">{bracket[bracket.length - 1][0].winner}</span>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-sm">Champion</span>
+                                                    )}
                                                 </div>
                                             </div>
-                                        );
-                                    })}
 
-                                    {/* Final Winner Display for Desktop */}
-                                    <div className="hidden md:flex flex-col justify-center ml-16 items-center">
-                                        <div className="w-48 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center" style={{ borderColor: headerInfo.colors.accent }}>
-                                            {bracket.length > 0 && bracket[bracket.length - 1][0].winner ? (
-                                                <div>
-                                                    <CrownIcon />
-                                                    <span className="font-bold text-lg" style={{ color: headerInfo.colors.main }}>{bracket[bracket.length - 1][0].winner}</span>
+                                            {/* RIGHT SIDE */}
+                                            <div className="flex flex-row-reverse z-10">
+                                                {bracket.slice(0, bracket.length - 1).map((round, rIndex) => {
+                                                    const matches = round.slice(round.length / 2);
+                                                    let roundLabel = `Round ${rIndex + 1}`;
+                                                    if (rIndex === bracket.length - 2) roundLabel = "Semi-finals";
+                                                    else if (rIndex === bracket.length - 3) roundLabel = "Quarter-finals";
+                                                    else if (rIndex === bracket.length - 4) roundLabel = "Round of 16";
+
+                                                    return (
+                                                        <div key={`right-${rIndex}`} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'mr-12' : '') : ''}`}>
+                                                            <h3 className="hidden md:block text-xs font-bold uppercase tracking-widest mb-4 sticky top-0 pb-2 text-center" style={{ color: headerInfo.colors.accent }}>
+                                                                {roundLabel}
+                                                            </h3>
+                                                            <div className="flex flex-col justify-around h-full" style={{ gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem', paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0' }}>
+                                                                {matches.map((match, localIdx) => (
+                                                                    <MatchCard key={match.id} match={match} roundIndex={rIndex} onSelect={(playerKey) => handleSelection(rIndex, localIdx + (round.length / 2), playerKey)} />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* EXISTING BRACKET LOGIC */}
+                                            {bracket.map((round, rIndex) => {
+                                                if (window.innerWidth < 768 && activeTab !== rIndex) return null;
+
+                                                let roundLabel = `Round ${rIndex + 1}`;
+                                                const isFinal = rIndex === bracket.length - 1;
+                                                const isSemi = rIndex === bracket.length - 2;
+                                                const isQuarter = rIndex === bracket.length - 3;
+
+                                                if (isFinal) roundLabel = "Final";
+                                                else if (isSemi) roundLabel = "Semi-finals";
+                                                else if (isQuarter) roundLabel = "Quarter-finals";
+
+                                                return (
+                                                    <div key={rIndex} className={`flex flex-col space-y-4 ${rIndex > 0 ? (window.innerWidth >= 768 ? 'ml-12' : '') : ''}`}>
+                                                        <h3 className="hidden md:block text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 sticky top-0 bg-[#F3F4F6] pb-2 text-center">
+                                                            {roundLabel}
+                                                        </h3>
+
+                                                        <div
+                                                            className="flex flex-col justify-around h-full"
+                                                            style={{
+                                                                gap: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 0.5}rem` : '1rem',
+                                                                paddingTop: window.innerWidth >= 768 ? `${Math.pow(2, rIndex) * 2}rem` : '0',
+                                                            }}
+                                                        >
+                                                            {round.map((match, mIndex) => (
+                                                                <MatchCard
+                                                                    key={match.id}
+                                                                    match={match}
+                                                                    roundIndex={rIndex}
+                                                                    onSelect={(playerKey) => handleSelection(rIndex, mIndex, playerKey)}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Final Winner Display for Desktop */}
+                                            <div className="hidden md:flex flex-col justify-center ml-16 items-center">
+                                                <div className="w-48 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-white shadow-sm p-4 text-center" style={{ borderColor: headerInfo.colors.accent }}>
+                                                    {bracket.length > 0 && bracket[bracket.length - 1][0].winner ? (
+                                                        <div>
+                                                            <CrownIcon />
+                                                            <span className="font-bold text-lg" style={{ color: headerInfo.colors.main }}>{bracket[bracket.length - 1][0].winner}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-sm">Champion</span>
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <span className="text-gray-400 text-sm">Champion</span>
-                                            )}
-                                        </div>
-                                    </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </>
                         )}
